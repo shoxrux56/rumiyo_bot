@@ -258,9 +258,6 @@ async def start(m: Message):
              "1, 3, 8, 21 kundan keyin. Eshitib yozish va gapirish mashqlari ham bor.\n"
              "Har kuni bitta qisqa dars, A1 dan C1 gacha.\n\n"
              "Avval darajangizni aniqlaymiz, keyin har kuni bitta dars bo'ladi.")
-    if TALK_URL and TALK_SECRET:
-        intro += ("\n\n🗣 Til gapirib o'rganiladi: har darsdan keyin «Suhbat» bo'limida boshqa o'quvchi bilan gaplashasiz "
-                  "va birga rolli o'yin o'ynaysiz.")
     await m.answer(intro + "\n\nBoshlaymizmi?", reply_markup=kb)
 
 
