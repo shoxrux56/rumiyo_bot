@@ -1,0 +1,14 @@
+[Unit]
+Description=RuMio Telegram bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=/opt/rumio
+EnvironmentFile=/opt/rumio/.env
+ExecStart=/opt/rumio/venv/bin/python bot.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
