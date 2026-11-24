@@ -208,7 +208,7 @@ M_PUL = "💸 Pul ishlash"
 
 
 def menu_rows():
-    return [[KeyboardButton(text=M_LESSON)]]      # pastda faqat bitta tugma qoladi
+    return [[KeyboardButton(text=M_LESSON)], [KeyboardButton(text=M_LESSONS), KeyboardButton(text=M_VIP)], [KeyboardButton(text=M_LANG)]]      # Suhbat va Pul ishlash olib tashlandi
 
 
 def main_menu():
@@ -5316,7 +5316,9 @@ async def reminder_go(c: CallbackQuery):
 async def main():
     for attempt in range(1, 4):  # chatdagi "Menyu" tugmasi; tarmoq uzilsa 3 marta urinadi
         try:
-            await bot.set_my_commands([BotCommand(command="dars", description="📖 Darsni ochish")])
+            await bot.set_my_commands([BotCommand(command="dars", description="📖 Darsni ochish"),
+                                       BotCommand(command="vip", description="💎 VIP ga o'tish"),
+                                       BotCommand(command="til", description="🌐 Tilni almashtirish")])
             # guruhda faqat /oyin ko'rinsin (ilgari /dars va /vip chiqib, odamni chalg'itardi)
             await bot.set_my_commands([BotCommand(command="oyin", description="🎮 Ruscha o'yin (faqat admin)")],
                                       scope=BotCommandScopeAllGroupChats())
