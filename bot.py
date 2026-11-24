@@ -200,7 +200,7 @@ def webapp_for(uid):
     return EN_WEBAPP_URL if ulang(uid) == "en" else WEBAPP_URL
 
 
-M_LESSON, M_VIP, M_ME, M_HELP = "📚 Hozirgi dars", "💎 VIP obuna", "📈 Mening natijam", "ℹ️ Narx va yordam"
+M_LESSON, M_VIP, M_ME, M_HELP = "📖 Darsni ochish", "💎 VIP obuna", "📈 Mening natijam", "ℹ️ Narx va yordam"
 M_LANG = "🌐 Tilni almashtirish"
 M_TALK = "🗣 Suhbat"
 M_LESSONS = "📚 Darslarim"
@@ -208,10 +208,7 @@ M_PUL = "💸 Pul ishlash"
 
 
 def menu_rows():
-    if PAID_MODE:
-        return [[KeyboardButton(text=M_LESSON), KeyboardButton(text=M_TALK)], [KeyboardButton(text=M_LANG)],
-                [KeyboardButton(text=M_LESSONS), KeyboardButton(text=M_VIP)], [KeyboardButton(text=M_PUL)]]
-    return [[KeyboardButton(text=M_LESSON), KeyboardButton(text=M_TALK)], [KeyboardButton(text=M_LANG)], [KeyboardButton(text=M_LESSONS)]]
+    return [[KeyboardButton(text=M_LESSON)]]      # pastda faqat bitta tugma qoladi
 
 
 def main_menu():
@@ -1622,7 +1619,7 @@ async def admin_cb(c: CallbackQuery):
 
 
 # ---------------- doimiy menyu tugmalari ----------------
-@dp.message(F.text == M_LESSON)
+@dp.message(F.text.in_({M_LESSON, "📚 Hozirgi dars"}))
 async def menu_lesson(m: Message):
     await cmd_lesson(m)
 
@@ -5319,10 +5316,7 @@ async def reminder_go(c: CallbackQuery):
 async def main():
     for attempt in range(1, 4):  # chatdagi "Menyu" tugmasi; tarmoq uzilsa 3 marta urinadi
         try:
-            await bot.set_my_commands([BotCommand(command="dars", description="📚 Hozirgi dars"),
-                                       BotCommand(command="vip", description="💎 VIP ga o'tish"),
-                                       BotCommand(command="pul", description="💸 Pul ishlash"),
-                                       BotCommand(command="til", description="🌐 Tilni almashtirish")])
+            await bot.set_my_commands([BotCommand(command="dars", description="📖 Darsni ochish")])
             # guruhda faqat /oyin ko'rinsin (ilgari /dars va /vip chiqib, odamni chalg'itardi)
             await bot.set_my_commands([BotCommand(command="oyin", description="🎮 Ruscha o'yin (faqat admin)")],
                                       scope=BotCommandScopeAllGroupChats())
