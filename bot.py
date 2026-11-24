@@ -222,7 +222,23 @@ def test_menu(url):
         [KeyboardButton(text="📝 Testni boshlash", web_app=WebAppInfo(url=url))]] + menu_rows())
 
 
+def placement_site(uid):
+    """Yangi o'quvchining daraja testi Rumiyo saytida o'tadi (Rumiyo tanishadi -> test -> natija -> hozir/ertaga)."""
+    return bool(uid and RUMIYO_URL and TALK_SECRET and os.getenv("INTRO_OFF") != "1" and os.getenv("PLACEMENT_SITE") != "0")
+
+
+def pl_link(uid):
+    import base64, hashlib, hmac
+    body = base64.urlsafe_b64encode(json.dumps({"u": uid, "l": "A1", "e": int(time.time()) + 86400, "d": 0, "g": ulang(uid), "t": "Daraja testi", "s": 0, "n": 0,
+                                                "v": 0, "h": 3, "tx": webapp_for(uid), "o": (user(uid)[0] or "")[:40]},
+                                               separators=(",", ":"), ensure_ascii=False).encode()).decode().rstrip("=")
+    sig = hmac.new(TALK_SECRET.encode(), body.encode(), hashlib.sha256).hexdigest()
+    return f"{RUMIYO_URL.rstrip('/')}/?t={body}.{sig}"
+
+
 def test_kb(uid=None):
+    if placement_site(uid):
+        return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="📝 Testni boshlash", web_app=WebAppInfo(url=pl_link(uid)))]])
     url = webapp_for(uid) if uid else WEBAPP_URL
     return ReplyKeyboardMarkup(resize_keyboard=True, keyboard=[[KeyboardButton(
         text="📝 Testni boshlash", web_app=WebAppInfo(url=url))]])
@@ -242,6 +258,15 @@ async def start(m: Message):
     goal, level = user(m.from_user.id)
     if arg == "talk" and level:  # guruhdagi «Suhbat» tugmasidan keldi
         return await menu_talk(m)
+    if arg == "dars" and not level:
+        try:
+            await apply_site_placements()
+        except Exception:
+            pass
+        goal, level = user(uid)
+    if arg == "dars" and level and meta_get(f"plsent{uid}") and now() - int(meta_get(f"plsent{uid}") or 0) < 900:
+        meta_set(f"plsent{uid}", "")                    # dars xabari allaqachon yuborilgan: takrorlamaymiz
+        return await m.answer("👆 Dars xabari yuqorida. «📖 Darsni ochish» tugmasini bosing.", reply_markup=main_menu())
     if arg == "dars" and level:  # Rumiyo saytidagi «Darsni boshlash» tugmasidan keldi
         meta_set(intro_key(uid), "1")
         return await show_lesson(m, uid, skip_intro=True)
@@ -1306,10 +1331,55 @@ class _SiteMsg:
         return await bot.send_message(self.uid, text, **kw)
 
 
+async def apply_site_placements():
+    """Rumiyo saytida o'tgan daraja testlarini olib: darajani saqlaydi, natijani yuboradi, 'hozir/ertaga' qaroriga qarab davom ettiradi."""
+    if not (RUMIYO_URL and TALK_SECRET):
+        return
+    last = int(meta_get("siteres_pl") or 0)
+    async with aiohttp.ClientSession() as http, http.get(
+            RUMIYO_URL.rstrip("/") + "/admin/placements", params={"after": last}, headers={"X-Secret": TALK_SECRET},
+            timeout=aiohttp.ClientTimeout(total=25)) as r:
+        data = await r.json() if r.status == 200 else {}
+    for it in data.get("results", []):
+        last = max(last, int(it["id"]))
+        meta_set("siteres_pl", str(last))
+        uid = int(it["u"])
+        try:
+            if user(uid)[1]:
+                continue                       # daraja allaqachon bor
+            res = result_text(it.get("raw") or "")
+            if not res:
+                continue
+            level, text = res
+            try:
+                if json.loads(it["raw"]).get("skip"):
+                    meta_set(f"sk{uid}", "1")
+            except Exception:
+                pass
+            db.execute("INSERT INTO users(user_id, level) VALUES(?, ?) ON CONFLICT(user_id) DO UPDATE SET level=excluded.level", (uid, level))
+            db.commit()
+            await bot.send_message(uid, text, reply_markup=main_menu())
+            await ref_credit(uid)
+            if it.get("later"):
+                db.execute("UPDATE users SET next_at=?, notified=0 WHERE user_id=?", (next_unlock(now()), uid))
+                db.commit()
+                await bot.send_message(uid, "🌙 Mayli, birinchi dars ertaga tayyor bo'ladi. Vaqti kelganda o'zim yozaman. Ertagacha ko'rishguncha!")
+            else:
+                meta_set(f"plsent{uid}", str(now()))
+                meta_set(intro_key(uid), "1")          # bugun Rumiyo bilan allaqachon gaplashdi
+                await show_lesson(_SiteMsg(uid), uid)
+        except Exception as e:
+            print("sayt daraja natijasi:", type(e).__name__, e)
+
+
 async def site_results_loop():
     """Rumiyo saytida (trener ichida) yechilgan test natijalarini ~20 soniyada bir marta olib, darsni tugatadi."""
     await asyncio.sleep(15)
     while True:
+        try:
+            await apply_site_placements()
+        except Exception as e:
+            print("sayt daraja so'rovi:", type(e).__name__)
         try:
             if RUMIYO_URL and TALK_SECRET:
                 last = int(meta_get("siteres_last") or 0)
