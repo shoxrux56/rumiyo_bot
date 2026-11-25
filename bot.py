@@ -1508,11 +1508,14 @@ async def admin_cb(c: CallbackQuery):
         text, kb = rk_view()
         await edit(c, text, kb)
     elif act == "rkadd":
-        paid_mode = len(p) > 2 and p[2] == "paid"
-        pending[uid] = ("rkey", "paid" if paid_mode else "free")
-        if paid_mode:
-            msg = ("💎 Pullik Gemini kalitni (AIza...) shu yerga yuboring. Eskisi almashadi. Xabar darhol o'chiriladi.\n"
-                   "Kalitni hech kimga va GitHub'ga bermang.")
+        mode = p[2] if len(p) > 2 and p[2] in ("strong", "paid") else "free"
+        pending[uid] = ("rkey", mode)
+        if mode == "strong":
+            msg = ("💎 KUCHLI Gemini kalitni (AIza...) yuboring: yangi o'quvchining dastlabki 3 kuni shu kalit va kuchli model bilan ishlaydi. "
+                   "Eskisi almashadi. Xabar darhol o'chiriladi.\nKalitni hech kimga va GitHub'ga bermang.")
+        elif mode == "paid":
+            msg = ("💰 PULLIK Gemini kalitni (AIza...) yuboring: bepul kalitlarning kuchi yetmasa shu ishlaydi (arzon model). "
+                   "Eskisi almashadi. Xabar darhol o'chiriladi.\nKalitni hech kimga va GitHub'ga bermang.")
         else:
             msg = ("🆓 Bepul kalitlarni shu yerga yuboring: Groq, OpenRouter yoki Gemini (qaysi ekanini bot o'zi biladi). "
                    "Bir xabarda istalgancha, har qatorga bittadan yozing, yoki ketma-ket yuboring. Xabar darhol o'chiriladi.\n"
@@ -1908,7 +1911,7 @@ def rm_list(page=0):
                        [("📥 Zaxira fayl", "adm:rmjson"), ("📤 Fayldan qo'shish", "adm:rmimp")], [("⬅️ Orqaga", "adm:rm")])
 
 
-RK_KINDS = {"groq": ("Groq", "gsk_"), "openrouter": ("OpenRouter", "sk-or-"), "gemini": ("Gemini", "AIza"), "gemini_paid": ("Gemini 💎", "AIza")}
+RK_KINDS = {"groq": ("Groq", "gsk_"), "openrouter": ("OpenRouter", "sk-or-"), "gemini": ("Gemini", "AIza"), "gemini_paid": ("Gemini 💰", "AIza"), "gemini_strong": ("Gemini 💎", "AIza")}
 
 
 def rk_get(kind):
@@ -1949,18 +1952,21 @@ async def rm_push_keys():
 
 def rk_view():
     lines, rows = [], []
-    paid = rk_get("gemini_paid")
-    lines.append("💎 PULLIK (yangi o'quvchi, dastlabki 3 kun, kuchli model):\n   Gemini: " + (", ".join("…" + k[-4:] for k in paid) if paid else "yo'q"))
-    rows += [[(f"🗑 💎 Gemini …{k[-4:]}", f"adm:rkdel:gemini_paid:{i}")] for i, k in enumerate(paid)]
-    lines.append("\n🆓 BEPUL (qolgan hamma, o'yin va zaxira):")
+    for kind, title in (("gemini_strong", "💎 KUCHLI (yangi o'quvchi, dastlabki 3 kun, kuchli model)"),
+                        ("gemini_paid", "💰 PULLIK (3 kundan keyin: bepul yetmasa shu ishlaydi, arzon model)")):
+        ks = rk_get(kind)
+        lines.append(f"{title}:\n   Gemini: " + (", ".join("…" + k[-4:] for k in ks) if ks else "yo'q") + "\n")
+        icon = "💎" if kind == "gemini_strong" else "💰"
+        rows += [[(f"🗑 {icon} Gemini …{k[-4:]}", f"adm:rkdel:{kind}:{i}")] for i, k in enumerate(ks)]
+    lines.append("🆓 BEPUL (3 kundan keyin birinchi shular ishlaydi, arzon model; o'yin va zaxira ham):")
     for kind in ("groq", "openrouter", "gemini"):
         name = RK_KINDS[kind][0]
         ks = rk_get(kind)
         lines.append(f"   {name}: " + (", ".join("…" + k[-4:] for k in ks) if ks else "yo'q"))
         rows += [[(f"🗑 🆓 {name} …{k[-4:]}", f"adm:rkdel:{kind}:{i}")] for i, k in enumerate(ks)]
     return ("🔑 Kalitlar\n\n" + "\n".join(lines) +
-            "\n\nPullik Gemini kalit faqat yangi o'quvchilarga kuchli model bilan ishlaydi; u boshqa joyga sarflanmaydi. Bepul kalitlar qolgan hamma ishni qiladi.",
-            kb_of([("💎 Pullik kalit", "adm:rkadd:paid"), ("🆓 Bepul kalit", "adm:rkadd:free")], [("✅ Tayyor", "adm:rk")], *rows, [("⬅️ Orqaga", "adm:home")]))
+            "\n\nTartib: yangi o'quvchi 💎, keyin hamma 🆓 bilan boshlaydi, kuchi yetmasa 💰 ga o'tadi, u ham yetmasa Rumiyosiz oddiy rejim.",
+            kb_of([("💎 Kuchli kalit", "adm:rkadd:strong"), ("💰 Pullik kalit", "adm:rkadd:paid")], [("🆓 Bepul kalit", "adm:rkadd:free"), ("✅ Tayyor", "adm:rk")], *rows, [("⬅️ Orqaga", "adm:home")]))
 
 
 def rk_wait(m):
@@ -1980,15 +1986,17 @@ async def rk_input(m: Message):
     # Bir xabarda istalgancha kalit: qator, bo'sh joy yoki vergul bilan ajratilgan; ketma-ket xabarlar ham qabul qilinadi
     toks = [t for t in re.split(r"[\s,;]+", raw.strip()) if t]
     added, dup, bad = {}, 0, 0
-    paid_mode = len(pending.get(uid, ())) > 1 and pending[uid][1] == "paid"
+    mode = pending[uid][1] if len(pending.get(uid, ())) > 1 else "free"
+    single = {"strong": "gemini_strong", "paid": "gemini_paid"}.get(mode)
     for k in toks:
-        kind = "gemini_paid" if (paid_mode and k.startswith("AIza")) else next((kd for kd, (_, pref) in RK_KINDS.items() if kd != "gemini_paid" and k.startswith(pref)), None)
-        if paid_mode and kind != "gemini_paid":
-            kind = None
+        if single:
+            kind = single if k.startswith("AIza") else None
+        else:
+            kind = next((kd for kd, (_, pref) in RK_KINDS.items() if kd not in ("gemini_paid", "gemini_strong") and k.startswith(pref)), None)
         if not kind or not (20 < len(k) < 250):
             bad += 1
             continue
-        ks = [] if kind == "gemini_paid" else rk_get(kind)
+        ks = [] if kind in ("gemini_paid", "gemini_strong") else rk_get(kind)
         if k in ks:
             dup += 1
             continue
