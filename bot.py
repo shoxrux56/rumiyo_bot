@@ -1468,6 +1468,31 @@ async def edit(c: CallbackQuery, text, kb):
         pass
 
 
+@dp.message(Command("hammasini_nolla"))
+async def reset_all(m: Message):
+    """Admin: hamma foydalanuvchi (o'zingiz ham) noldan boshlaydi. Darslar, promokodlar, kalitlar va sozlamalar qoladi."""
+    if not is_admin(m.from_user.id):
+        return
+    if (m.text or "").split(maxsplit=1)[1:] != ["HA"]:
+        n = db.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+        v = db.execute("SELECT COUNT(*) FROM users WHERE paid=1").fetchone()[0]
+        return await m.answer(f"⚠️ {n} ta foydalanuvchi ({v} ta VIP), ularning darajasi, to'lovlari, takliflari va pullari O'CHADI.\n"
+                              "Darslar, promokodlar, kalitlar qoladi. Avval zaxira fayl yuboriladi.\n\n"
+                              "Tasdiqlash uchun yozing:\n/hammasini_nolla HA")
+    path = os.path.join(BACKUP_DIR, "tozalashdan-oldin.db")
+    os.makedirs(BACKUP_DIR, exist_ok=True)
+    snapshot(path)
+    await m.answer_document(FSInputFile(path, filename="tozalashdan-oldin.db"), caption="💾 Eski baza. Saqlab qo'ying (kerak bo'lsa qaytarsa bo'ladi).")
+    for t in ("users", "progress", "payments", "pay_wait", "talk_use", "referrals", "payouts", "earnings", "user_promo"):
+        db.execute(f"DELETE FROM {t}")
+    for (k,) in db.execute("SELECT k FROM meta").fetchall():
+        if re.search(r"\d{5,}$", k):                      # foydalanuvchiga tegishli belgilar (sk123456, plsent123456 ...)
+            db.execute("DELETE FROM meta WHERE k=?", (k,))
+    db.commit()
+    seen_users.clear(); flood.clear(); sub_ok.clear(); sub_in.clear()
+    await m.answer("✅ Hamma noldan boshladi. Endi /start bosing: o'zingiz ham yangi foydalanuvchisiz.", reply_markup=ReplyKeyboardRemove())
+
+
 @dp.message(Command("admin"))
 async def admin(m: Message):
     uid = m.from_user.id
