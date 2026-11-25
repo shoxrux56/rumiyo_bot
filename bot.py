@@ -5403,8 +5403,9 @@ async def reminder_go(c: CallbackQuery):
         await show_lesson(c.message, c.from_user.id)
 
 
-async def main():
-    for attempt in range(1, 4):  # chatdagi "Menyu" tugmasi; tarmoq uzilsa 3 marta urinadi
+async def set_menu_commands():
+    """Chatdagi "Menyu" tugmasi: orqa fonda o'rnatiladi, polling'ni kutdirmaydi."""
+    for attempt in range(1, 4):
         try:
             await bot.set_my_commands([BotCommand(command="dars", description="📖 Darsni ochish"),
                                        BotCommand(command="vip", description="💎 VIP ga o'tish"),
@@ -5412,13 +5413,17 @@ async def main():
             # guruhda faqat /oyin ko'rinsin (ilgari /dars va /vip chiqib, odamni chalg'itardi)
             await bot.set_my_commands([BotCommand(command="oyin", description="🎮 Ruscha o'yin (faqat admin)")],
                                       scope=BotCommandScopeAllGroupChats())
-            break
+            return
         except Exception as e:
             print(f"menyu o'rnatilmadi ({attempt}/3):", e)
-            if attempt == 3:
-                print("Telegram bilan aloqa yo'q: internet/VPN ni tekshiring. Bot ishlashda davom etadi, aloqa tiklansa o'zi ulanadi.")
-            else:
+            if attempt < 3:
                 await asyncio.sleep(5)
+    print("Telegram bilan aloqa yo'q: internet/VPN ni tekshiring. Bot ishlashda davom etadi, aloqa tiklansa o'zi ulanadi.")
+
+
+async def main():
+    t0 = time.time()
+    asyncio.create_task(set_menu_commands())
     try:
         await startup_restore()
     except Exception as e:  # tarmoq xatosi botni to'xtatmasin
@@ -5442,6 +5447,7 @@ async def main():
     asyncio.create_task(rm_pusher())
     asyncio.create_task(cloud_backuper())
     asyncio.create_task(housekeeping())
+    print(f"Bot tayyor: {time.time() - t0:.1f} soniyada polling boshlandi")
     while True:  # Telegram bilan aloqa uzilsa bot yiqilmaydi, o'zi qayta ulanadi
         try:
             await dp.start_polling(bot, close_bot_session=False)
