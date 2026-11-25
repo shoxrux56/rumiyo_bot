@@ -236,12 +236,26 @@ def pl_link(uid):
     return f"{RUMIYO_URL.rstrip('/')}/?t={body}.{sig}"
 
 
-def test_kb(uid=None):
-    if placement_site(uid):
-        return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="📝 Testni boshlash", web_app=WebAppInfo(url=pl_link(uid)))]])
+def classic_test_kb(uid=None):
+    """Oddiy usul: chat tagidagi tugma orqali trener ichidagi daraja testi (sayt ishlamasa ham ishlaydi)."""
     url = webapp_for(uid) if uid else WEBAPP_URL
     return ReplyKeyboardMarkup(resize_keyboard=True, keyboard=[[KeyboardButton(
         text="📝 Testni boshlash", web_app=WebAppInfo(url=url))]])
+
+
+def test_kb(uid=None):
+    if placement_site(uid) and RUMIYO_URL.startswith("https://"):
+        return InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="📝 Testni boshlash", web_app=WebAppInfo(url=pl_link(uid)))]])
+    return classic_test_kb(uid)
+
+
+async def ask_test(msg, text, uid):
+    """Test tugmasini yuboradi. Rumiyo havolasi xato bersa, odam qotib qolmasin: oddiy test tugmasi yuboriladi."""
+    try:
+        return await msg.answer(text, reply_markup=test_kb(uid))
+    except Exception as e:
+        print("test tugmasi (sayt) yuborilmadi, oddiy usulga o'tildi:", type(e).__name__, str(e)[:120])
+        return await msg.answer(text, reply_markup=classic_test_kb(uid))
 
 
 @dp.message(CommandStart())
@@ -274,7 +288,7 @@ async def start(m: Message):
         await m.answer("👋 Xush kelibsiz! Pastdagi menyudan foydalaning.", reply_markup=main_menu())
         return await show_lesson(m, m.from_user.id)
     if goal:  # maqsad tanlangan, test hali topshirilmagan
-        return await m.answer("Darajangizni aniqlash qoldi. Chat tagidagi «📝 Testni boshlash» tugmasini bosing 👇", reply_markup=test_kb(uid))
+        return await ask_test(m, "Darajangizni aniqlash qoldi. Chat tagidagi «📝 Testni boshlash» tugmasini bosing 👇", uid)
     if lang_chosen(uid):  # til tanlangan, maqsad hali yo'q
         return await m.answer(goal_question(ulang(uid)), reply_markup=goal_kb())
     kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Boshlash", callback_data="go")]])
@@ -347,7 +361,7 @@ async def do_switch(m: Message, uid, new):
     if level:
         return await show_lesson(m, uid)
     if goal:
-        return await m.answer("Darajangizni aniqlash qoldi. Chat tagidagi «📝 Testni boshlash» tugmasini bosing 👇", reply_markup=test_kb(uid))
+        return await ask_test(m, "Darajangizni aniqlash qoldi. Chat tagidagi «📝 Testni boshlash» tugmasini bosing 👇", uid)
     await m.answer(goal_question(new), reply_markup=goal_kb())
 
 
@@ -368,13 +382,18 @@ async def got_goal(c: CallbackQuery):
         return await c.answer()
     if user(c.from_user.id)[0]:
         return await c.answer("Maqsad allaqachon tanlangan")
+    try:
+        await c.answer()                                # tugma aylanib qolmasin
+    except Exception:
+        pass
     db.execute("INSERT INTO users(user_id, goal) VALUES(?, ?) "
                "ON CONFLICT(user_id) DO UPDATE SET goal=excluded.goal", (c.from_user.id, key))
     db.commit()
-    await c.message.edit_text(f"Ajoyib, maqsadingiz: {GOALS[key]}")
-    await c.message.answer("Endi darajangizni aniqlaymiz, bu 2 daqiqa oladi. Chat tagidagi «📝 Testni boshlash» tugmasini bosing 👇",
-                           reply_markup=test_kb(c.from_user.id))
-    await c.answer()
+    try:
+        await c.message.edit_text(f"Ajoyib, maqsadingiz: {GOALS[key]}")
+    except Exception:
+        pass
+    await ask_test(c.message, "Endi darajangizni aniqlaymiz, bu 2 daqiqa oladi. Chat tagidagi «📝 Testni boshlash» tugmasini bosing 👇", c.from_user.id)
 
 
 def result_text(raw):
@@ -2372,7 +2391,7 @@ async def sub_check(c: CallbackQuery):
     if level:
         return await c.message.answer("✅ Rahmat! Davom etamiz 👇", reply_markup=main_menu())
     if goal:
-        return await c.message.answer("✅ Rahmat! Darajangizni aniqlash qoldi: «📝 Testni boshlash» tugmasini bosing 👇", reply_markup=test_kb(c.from_user.id))
+        return await ask_test(c.message, "✅ Rahmat! Darajangizni aniqlash qoldi: «📝 Testni boshlash» tugmasini bosing 👇", c.from_user.id)
     kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="Boshlash", callback_data="go")]])
     await c.message.answer("✅ Rahmat, a'zo bo'ldingiz! Rus tilini o'rganishni boshlaymizmi?", reply_markup=kb)  # /start ni qayta bosish shart emas
 
@@ -3527,7 +3546,9 @@ async def housekeeping():
 @dp.errors()
 async def on_error(event):
     """Kutilmagan xato bitta foydalanuvchini yiqitsa ham, bot ishlashda davom etadi."""
+    import traceback
     print("xato:", repr(event.exception))
+    traceback.print_exception(event.exception)   # logda qaysi qatorda yiqilgani ko'rinsin
     return True
 
 
