@@ -1925,7 +1925,7 @@ async def rm_pusher():
             await rm_push_keys()
         except Exception as e:
             print("rm_sync:", e)
-        await asyncio.sleep(120)
+        await asyncio.sleep(45)         # sayt qayta ishga tushsa, kalit 45 soniyada qaytadi
 
 
 def rm_view():
