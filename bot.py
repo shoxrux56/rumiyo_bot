@@ -1247,6 +1247,22 @@ def week_url(uid):
     return f"{_tbase(uid)}?d=1&m=week&l=-2000"
 
 
+def wk_link(uid):
+    """VIP uchun haftalik og'zaki sinov: Rumiyo bilan ~10 daqiqa ovozli suhbat. Havolada oxirgi tugatilgan darslarning kun raqamlari (dl)."""
+    import base64, hashlib, hmac
+    days = []
+    for (u,) in db.execute("SELECT l.url FROM progress p JOIN lessons l ON l.id=p.lesson_id WHERE p.user_id=? AND COALESCE(p.skipped,0)=0 "
+                           "ORDER BY p.rowid DESC LIMIT 6", (uid,)).fetchall():
+        d = re.search(r"[?&]d=(\d+)", u or "")
+        if d:
+            days.append(int(d.group(1)))
+    body = base64.urlsafe_b64encode(json.dumps({"u": uid, "l": eff(user(uid)[1]), "e": int(time.time()) + 86400, "d": days[0] if days else 0, "dl": days,
+                                                "g": ulang(uid), "t": "Hafta sinovi", "s": 0, "n": 0, "v": 1, "h": 5, "o": (user(uid)[0] or "")[:40]},
+                                               separators=(",", ":"), ensure_ascii=False).encode()).decode().rstrip("=")
+    sig = hmac.new(TALK_SECRET.encode(), body.encode(), hashlib.sha256).hexdigest()
+    return f"{RUMIYO_URL.rstrip('/')}/?t={body}.{sig}"
+
+
 def week_id():
     return datetime.now(TZ).strftime("%G-%V")
 
@@ -1339,9 +1355,15 @@ async def weekly_loop():
                             await send_voice_msg(uid, "weekly", idle=0, extra={"kind": "weekly", "week_done": wk})   # ovozli hisobot: Rumiyo o'zi gapiradi
                     except Exception as e:
                         print("haftalik ovoz:", type(e).__name__)
-                    await send_safe(lambda uid=uid: bot.send_message(
-                        uid, "🏅 Hafta sinovi! O'tgan hafta o'rgangan gaplaringizdan 5 daqiqalik o'yin. Jazo yo'q, natija sizga ko'rinadi.\n"
-                             "Chat tagidagi «📝 Testni boshlash» tugmasini bosing 👇", reply_markup=test_menu(week_url(uid))))
+                    if (is_paid(uid) or is_admin(uid)) and RUMIYO_URL.startswith("https://") and TALK_SECRET:
+                        await send_safe(lambda uid=uid: bot.send_message(
+                            uid, "🏅 Hafta sinovi! Bu safar Rumiyo sizni og'zaki tekshiradi: o'tgan hafta o'rgangan gaplaringizdan taxminan 10 daqiqalik "
+                                 "ovozli o'yin. Jazo yo'q, qaysi gaplar qiyin bo'lganini birga ko'ramiz.",
+                            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🗣 Rumiyo bilan sinov", web_app=WebAppInfo(url=wk_link(uid)))]])))
+                    else:
+                        await send_safe(lambda uid=uid: bot.send_message(
+                            uid, "🏅 Hafta sinovi! O'tgan hafta o'rgangan gaplaringizdan 5 daqiqalik o'yin. Jazo yo'q, natija sizga ko'rinadi.\n"
+                                 "Chat tagidagi «📝 Testni boshlash» tugmasini bosing 👇", reply_markup=test_menu(week_url(uid))))
                     await asyncio.sleep(0.1)
         except Exception as e:
             print("hafta sinovi xatosi:", e)
@@ -5492,6 +5514,17 @@ async def send_voice_msg(uid, kind, kb=None, idle=None, extra=None):
     if not audio:
         return False
     return bool(await send_safe(lambda: bot.send_voice(uid, BufferedInputFile(audio, filename="rumiyo.mp3"), reply_markup=kb)))
+
+
+@dp.message(Command("hafta_ai"))
+async def cmd_week_ai(m: Message):
+    """Admin: Rumiyo bilan haftalik og'zaki sinovni hozir sinab ko'rish."""
+    if not is_admin(m.from_user.id):
+        return
+    if not (RUMIYO_URL.startswith("https://") and TALK_SECRET):
+        return await m.answer("RUMIYO_URL (https://...) va TALK_SECRET kerak.")
+    await m.answer("🗣 Haftalik sinov (Rumiyo bilan, ~10 daqiqa):", reply_markup=InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text="🗣 Rumiyo bilan sinov", web_app=WebAppInfo(url=wk_link(m.from_user.id)))]]))
 
 
 @dp.message(Command("ovoz"))
