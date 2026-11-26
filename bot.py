@@ -5414,6 +5414,96 @@ def rm_due(uid, na, t):
     return st
 
 
+# ---- Rumiyoning ovozli eslatmalari (odamga o'xshab ovozli xabar yuboradi) ----
+VOICE_PERSONA = os.getenv("VOICE_PERSONA", "friendly")     # friendly (Do'stona/mehribon), angry (Jahldor), sweet, fiery
+VOICE_STAGES = {1: "missed", 3: "comeback", 5: "last"}      # RM_HOURS dagi bosqich raqami -> qaysi ovozli gap (24, 96, 384 soatdan keyin)
+VOICE_LINES = {
+    "missed": ["{name}, nega darsga kirmadingiz? Men sizni kutib o'tirdim-ku! Bugun kiring, ikki daqiqa bo'lsa ham mayli.",
+               "{name}, jonim, kecha sizni kutdim, kelmadingiz. Xafa bo'ldim, lekin bugun kirsangiz kechiraman!",
+               "{name}, bugungi darsga kirib qo'ying, iltimos. Gaplar esdan chiqib ketmasin, men yordam beraman."],
+    "comeback": ["{name}, sizni juda sog'indim! Eslaysizmi, birga o'rganayotgan edik. Qaytib keling, qayerda to'xtagan bo'lsak, o'sha yerdan davom etamiz.",
+                 "{name}, gaplar esdan chiqmasin deb aytgandim-ku! Hali kech emas. Bugun bitta qisqa darsga kiring."],
+    "last": ["{name}, men hali ham sizni kutyapman. Hech qachon kech emas, bugun bir qadam tashlang, kiring darsga!"],
+}
+
+
+def voice_lines(kind):
+    try:
+        extra = json.loads(meta_get("vlines") or "{}").get(kind) or []
+    except Exception:
+        extra = []
+    return list(VOICE_LINES.get(kind, [])) + [x for x in extra if isinstance(x, str) and x.strip()]
+
+
+async def first_name(uid):
+    n = meta_get(f"fn{uid}")
+    if n:
+        return n
+    try:
+        n = ((await bot.get_chat(uid)).first_name or "").strip()
+    except Exception:
+        n = ""
+    if n:
+        meta_set(f"fn{uid}", n)
+    return n
+
+
+async def rm_audio(text, persona=None):
+    """Rumiyo serveridan shu matnning ovozini (MP3) oladi. Bo'lmasa None: bot matn yuboradi."""
+    if not (RUMIYO_URL and TALK_SECRET):
+        return None
+    try:
+        async with aiohttp.ClientSession() as http, http.post(RUMIYO_URL.rstrip("/") + "/admin/voice", headers={"X-Secret": TALK_SECRET},
+                                                              json={"text": text, "persona": persona or VOICE_PERSONA},
+                                                              timeout=aiohttp.ClientTimeout(total=90)) as r:
+            return await r.read() if r.status == 200 else None
+    except Exception as e:
+        print("ovozli xabar olinmadi:", type(e).__name__)
+        return None
+
+
+async def send_voice_msg(uid, kind, kb=None):
+    """Ovozli xabar yuboradi. Muvaffaqiyatli bo'lsa True; ovoz yaratilmasa False (chaqiruvchi matn yuboradi)."""
+    lines = voice_lines(kind)
+    if not lines:
+        return False
+    name = (await first_name(uid)) or "do'stim"
+    audio = await rm_audio(random.choice(lines).replace("{name}", name))
+    if not audio:
+        return False
+    return bool(await send_safe(lambda: bot.send_voice(uid, BufferedInputFile(audio, filename="rumiyo.mp3"), reply_markup=kb)))
+
+
+@dp.message(Command("ovoz"))
+async def cmd_voice(m: Message):
+    """Admin: ovozli eslatmani o'zingizga sinab ko'rish. /ovoz missed | comeback | last"""
+    if not is_admin(m.from_user.id):
+        return
+    parts = (m.text or "").split()
+    kind = parts[1] if len(parts) > 1 else "missed"
+    if kind not in VOICE_LINES:
+        return await m.answer("Turi: missed, comeback, last. Masalan: /ovoz missed")
+    if not await send_voice_msg(m.from_user.id, kind):
+        await m.answer("⚠️ Ovoz yaratilmadi. Tekshiring: RUMIYO_URL va TALK_SECRET to'g'ri, Rumiyo sayti ishlayaptimi.")
+
+
+@dp.message(Command("ovoz_qosh"))
+async def cmd_voice_add(m: Message):
+    """Admin: o'z gapingizni qo'shish. /ovoz_qosh missed {name}, nega kirmading?"""
+    if not is_admin(m.from_user.id):
+        return
+    parts = (m.text or "").split(maxsplit=2)
+    if len(parts) < 3 or parts[1] not in VOICE_LINES:
+        return await m.answer("Yozing: /ovoz_qosh missed Matn... ({name} o'rniga odam ismi qo'yiladi)\nTurlari: missed (1 kun), comeback (4 kun), last (16 kun)")
+    try:
+        d = json.loads(meta_get("vlines") or "{}")
+    except Exception:
+        d = {}
+    d.setdefault(parts[1], []).append(parts[2].strip()[:500])
+    meta_set("vlines", json.dumps(d, ensure_ascii=False))
+    await m.answer(f"✅ Qo'shildi ({parts[1]}). Hozir bu turda {len(voice_lines(parts[1]))} ta gap bor. Sinash: /ovoz {parts[1]}")
+
+
 async def reminder():
     while True:
         try:
@@ -5431,7 +5521,10 @@ async def reminder():
                         if paywalled(uid):
                             continue
                         kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="📖 Bugungi darsga kirish", callback_data="rmgo")]])
-                        ok = await send_safe(lambda: bot.send_message(uid, RM_TEXTS[max(nxt - 1, st)], reply_markup=kb))
+                        stage = max(nxt - 1, st)
+                        ok = bool(stage in VOICE_STAGES and await send_voice_msg(uid, VOICE_STAGES[stage], kb))   # avval Rumiyoning ovozli xabari
+                        if not ok:
+                            ok = await send_safe(lambda: bot.send_message(uid, RM_TEXTS[stage], reply_markup=kb))
                         if not ok and not await _can_reach(uid):
                             meta_set(f"rm{uid}", f"{na}:{len(RM_HOURS)}")  # bloklagan: boshqa yozmaymiz
                     except Exception as e:
