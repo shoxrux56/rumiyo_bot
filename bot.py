@@ -5448,13 +5448,13 @@ async def first_name(uid):
     return n
 
 
-async def rm_audio(text, persona=None):
-    """Rumiyo serveridan shu matnning ovozini (MP3) oladi. Bo'lmasa None: bot matn yuboradi."""
+async def rm_audio(text, persona=None, ctx=None):
+    """Rumiyo serveridan ovozli xabar (MP3) oladi. ctx bo'lsa, Rumiyoning o'zi vaziyatga qarab gap o'ylab topadi (text = zaxira). Bo'lmasa None."""
     if not (RUMIYO_URL and TALK_SECRET):
         return None
     try:
         async with aiohttp.ClientSession() as http, http.post(RUMIYO_URL.rstrip("/") + "/admin/voice", headers={"X-Secret": TALK_SECRET},
-                                                              json={"text": text, "persona": persona or VOICE_PERSONA},
+                                                              json={"text": text, "persona": persona or VOICE_PERSONA, "ctx": ctx},
                                                               timeout=aiohttp.ClientTimeout(total=90)) as r:
             return await r.read() if r.status == 200 else None
     except Exception as e:
@@ -5462,13 +5462,20 @@ async def rm_audio(text, persona=None):
         return None
 
 
-async def send_voice_msg(uid, kind, kb=None):
-    """Ovozli xabar yuboradi. Muvaffaqiyatli bo'lsa True; ovoz yaratilmasa False (chaqiruvchi matn yuboradi)."""
+VOICE_IDLE = {"missed": 30, "comeback": 100, "last": 400}      # soat (taxminan), /ovoz sinovi uchun
+
+
+async def send_voice_msg(uid, kind, kb=None, idle=None):
+    """Ovozli xabar yuboradi. Rumiyoning o'zi shu odamga vaziyatga qarab yangi gap o'ylab topadi; model javob bermasa tayyor gaplardan biri.
+    Muvaffaqiyatli bo'lsa True; ovoz yaratilmasa False (chaqiruvchi matn yuboradi)."""
     lines = voice_lines(kind)
     if not lines:
         return False
-    name = (await first_name(uid)) or "do'stim"
-    audio = await rm_audio(random.choice(lines).replace("{name}", name))
+    name = await first_name(uid)
+    goal, level = user(uid)
+    ctx = {"uid": uid, "name": name, "idle_hours": VOICE_IDLE.get(kind, 30) if idle is None else int(idle), "level": level,
+           "goal": re.sub(r"[^\w\s/']", "", GOALS.get(goal, "")).strip() if goal else "", "lang": re.sub(r"[^\w\s]", "", LANG_NAMES.get(ulang(uid), "")).strip(), "done": finished_count(uid)}
+    audio = await rm_audio(random.choice(lines).replace("{name}", name or "do'stim"), ctx=ctx)
     if not audio:
         return False
     return bool(await send_safe(lambda: bot.send_voice(uid, BufferedInputFile(audio, filename="rumiyo.mp3"), reply_markup=kb)))
@@ -5522,7 +5529,7 @@ async def reminder():
                             continue
                         kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="📖 Bugungi darsga kirish", callback_data="rmgo")]])
                         stage = max(nxt - 1, st)
-                        ok = bool(stage in VOICE_STAGES and await send_voice_msg(uid, VOICE_STAGES[stage], kb))   # avval Rumiyoning ovozli xabari
+                        ok = bool(stage in VOICE_STAGES and await send_voice_msg(uid, VOICE_STAGES[stage], kb, idle=idle))   # avval Rumiyoning ovozli xabari
                         if not ok:
                             ok = await send_safe(lambda: bot.send_message(uid, RM_TEXTS[stage], reply_markup=kb))
                         if not ok and not await _can_reach(uid):
