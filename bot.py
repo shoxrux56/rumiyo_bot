@@ -5449,6 +5449,16 @@ async def reminder_go(c: CallbackQuery):
         await show_lesson(c.message, c.from_user.id)
 
 
+@dp.message(F.chat.type == "private", F.text)
+async def fallback_text(m: Message):
+    """Boshqa hech narsaga to'g'ri kelmagan xabar: jim turmaymiz, odam "bot qotdi" deb o'ylamasin."""
+    uid = m.from_user.id
+    if user(uid)[1]:
+        await m.answer("Pastdagi tugmalardan birini tanlang 👇", reply_markup=main_menu())
+    else:
+        await m.answer("Boshlash uchun /start ni bosing 👇")
+
+
 async def set_menu_commands():
     """Chatdagi "Menyu" tugmasi: orqa fonda o'rnatiladi, polling'ni kutdirmaydi."""
     for attempt in range(1, 4):
