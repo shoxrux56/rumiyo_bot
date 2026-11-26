@@ -1331,6 +1331,14 @@ async def weekly_loop():
                     if meta_get(f"wkp{uid}") == wid or finished_count(uid) < 5 or paywalled(uid):
                         continue
                     meta_set(f"wkp{uid}", wid)
+                    fc = finished_count(uid)
+                    wk = max(0, fc - int(meta_get(f"wkc{uid}") or fc))      # shu haftada tugatilgan darslar
+                    meta_set(f"wkc{uid}", str(fc))
+                    try:
+                        if wk > 0:
+                            await send_voice_msg(uid, "weekly", idle=0, extra={"kind": "weekly", "week_done": wk})   # ovozli hisobot: Rumiyo o'zi gapiradi
+                    except Exception as e:
+                        print("haftalik ovoz:", type(e).__name__)
                     await send_safe(lambda uid=uid: bot.send_message(
                         uid, "🏅 Hafta sinovi! O'tgan hafta o'rgangan gaplaringizdan 5 daqiqalik o'yin. Jazo yo'q, natija sizga ko'rinadi.\n"
                              "Chat tagidagi «📝 Testni boshlash» tugmasini bosing 👇", reply_markup=test_menu(week_url(uid))))
@@ -1411,6 +1419,10 @@ async def site_results_loop():
                     meta_set("siteres_last", str(last))
                     try:
                         await got_lesson_test(_SiteMsg(int(it["u"])), int(it["u"]), (int(it["l"]), int(it["s"]), int(it["n"])), via_site=True)
+                        w = [str(x) for x in (it.get("w") or []) if str(x).strip()][:3]
+                        if w:     # Rumiyo nimani eslab qolganini odamga ko'rsatadi: ishonch va "aqlli" taassurot
+                            await bot.send_message(int(it["u"]), "🧠 Rumiyo eslab qoldi. Bugun shu gaplarda adashdingiz:\n" + "\n".join("• " + x for x in w) +
+                                                   "\n\nBularni keyingi darslar ichida o'zim sizga qaytarib turaman, to'liq yodlaguncha.")
                     except Exception as e:
                         print("sayt natijasi:", type(e).__name__, e)
         except Exception as e:
@@ -5424,6 +5436,7 @@ VOICE_LINES = {
     "comeback": ["{name}, sizni juda sog'indim! Eslaysizmi, birga o'rganayotgan edik. Qaytib keling, qayerda to'xtagan bo'lsak, o'sha yerdan davom etamiz.",
                  "{name}, gaplar esdan chiqmasin deb aytgandim-ku! Hali kech emas. Bugun bitta qisqa darsga kiring."],
     "last": ["{name}, men hali ham sizni kutyapman. Hech qachon kech emas, bugun bir qadam tashlang, kiring darsga!"],
+    "weekly": ["{name}, bu hafta zo'r o'qidingiz, barakalla! Endi hafta sinoviga kiring, o'rgangan gaplaringiz esingizdami, ko'ramiz."],
 }
 
 
@@ -5465,7 +5478,7 @@ async def rm_audio(text, persona=None, ctx=None):
 VOICE_IDLE = {"missed": 30, "comeback": 100, "last": 400}      # soat (taxminan), /ovoz sinovi uchun
 
 
-async def send_voice_msg(uid, kind, kb=None, idle=None):
+async def send_voice_msg(uid, kind, kb=None, idle=None, extra=None):
     """Ovozli xabar yuboradi. Rumiyoning o'zi shu odamga vaziyatga qarab yangi gap o'ylab topadi; model javob bermasa tayyor gaplardan biri.
     Muvaffaqiyatli bo'lsa True; ovoz yaratilmasa False (chaqiruvchi matn yuboradi)."""
     lines = voice_lines(kind)
@@ -5474,7 +5487,7 @@ async def send_voice_msg(uid, kind, kb=None, idle=None):
     name = await first_name(uid)
     goal, level = user(uid)
     ctx = {"uid": uid, "name": name, "idle_hours": VOICE_IDLE.get(kind, 30) if idle is None else int(idle), "level": level,
-           "goal": re.sub(r"[^\w\s/']", "", GOALS.get(goal, "")).strip() if goal else "", "lang": re.sub(r"[^\w\s]", "", LANG_NAMES.get(ulang(uid), "")).strip(), "done": finished_count(uid)}
+           "goal": re.sub(r"[^\w\s/']", "", GOALS.get(goal, "")).strip() if goal else "", "lang": re.sub(r"[^\w\s]", "", LANG_NAMES.get(ulang(uid), "")).strip(), "done": finished_count(uid), **(extra or {})}
     audio = await rm_audio(random.choice(lines).replace("{name}", name or "do'stim"), ctx=ctx)
     if not audio:
         return False
@@ -5489,8 +5502,8 @@ async def cmd_voice(m: Message):
     parts = (m.text or "").split()
     kind = parts[1] if len(parts) > 1 else "missed"
     if kind not in VOICE_LINES:
-        return await m.answer("Turi: missed, comeback, last. Masalan: /ovoz missed")
-    if not await send_voice_msg(m.from_user.id, kind):
+        return await m.answer("Turi: missed (1 kun), comeback (4 kun), last (16 kun), weekly (haftalik hisobot). Masalan: /ovoz missed")
+    if not await send_voice_msg(m.from_user.id, kind, extra={"kind": "weekly", "week_done": 4} if kind == "weekly" else None):
         await m.answer("⚠️ Ovoz yaratilmadi. Tekshiring: RUMIYO_URL va TALK_SECRET to'g'ri, Rumiyo sayti ishlayaptimi.")
 
 
@@ -5501,7 +5514,7 @@ async def cmd_voice_add(m: Message):
         return
     parts = (m.text or "").split(maxsplit=2)
     if len(parts) < 3 or parts[1] not in VOICE_LINES:
-        return await m.answer("Yozing: /ovoz_qosh missed Matn... ({name} o'rniga odam ismi qo'yiladi)\nTurlari: missed (1 kun), comeback (4 kun), last (16 kun)")
+        return await m.answer("Yozing: /ovoz_qosh missed Matn... ({name} o'rniga odam ismi qo'yiladi)\nTurlari: missed (1 kun), comeback (4 kun), last (16 kun), weekly (haftalik hisobot)")
     try:
         d = json.loads(meta_get("vlines") or "{}")
     except Exception:
