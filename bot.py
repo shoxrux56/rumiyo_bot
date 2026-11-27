@@ -273,11 +273,20 @@ async def start(m: Message):
     if arg == "talk" and level:  # guruhdagi «Suhbat» tugmasidan keldi
         return await menu_talk(m)
     if arg == "dars" and not level:
-        try:
-            await apply_site_placements()
-        except Exception:
-            pass
-        goal, level = user(uid)
+        for forced in (None, uid):                  # avval oddiy, keyin to'g'ridan-to'g'ri (raqamga qaramay)
+            try:
+                await apply_site_placements(force_uid=forced)
+            except Exception as e:
+                print("dars: natija olinmadi:", type(e).__name__, e)
+            goal, level = user(uid)
+            if level:
+                break
+        if level and meta_get(f"plsent{uid}"):
+            return                                   # natija va dars xabari yuborildi
+        if not level:
+            kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🔄 Qayta tekshirish", callback_data="plcheck")]])
+            return await m.answer("⏳ Test natijangiz hali yetib kelmadi. Bir necha soniyadan keyin «🔄 Qayta tekshirish»ni bosing. "
+                                  "Test qaytadan boshlanmaydi.", reply_markup=kb)
     if arg == "dars" and level and meta_get(f"plsent{uid}") and now() - int(meta_get(f"plsent{uid}") or 0) < 900:
         meta_set(f"plsent{uid}", "")                    # dars xabari allaqachon yuborilgan: takrorlamaymiz
         return await m.answer("👆 Dars xabari yuqorida. «📖 Darsni ochish» tugmasini bosing.", reply_markup=main_menu())
@@ -298,6 +307,20 @@ async def start(m: Message):
              "Har kuni bitta qisqa dars, A1 dan C1 gacha.\n\n"
              "Avval darajangizni aniqlaymiz, keyin har kuni bitta dars bo'ladi.")
     await m.answer(intro + "\n\nBoshlaymizmi?", reply_markup=kb)
+
+
+@dp.callback_query(F.data == "plcheck")
+async def pl_check(c: CallbackQuery):
+    uid = c.from_user.id
+    if not user(uid)[1]:
+        try:
+            await apply_site_placements(force_uid=uid)
+        except Exception as e:
+            print("plcheck:", type(e).__name__, e)
+    if user(uid)[1]:
+        await c.answer("✅ Natija keldi")
+        return
+    await c.answer("Hali kelmadi, yana bir oz kuting", show_alert=True)
 
 
 def lang_chosen(uid):
@@ -1380,22 +1403,57 @@ class _SiteMsg:
         return await bot.send_message(self.uid, text, **kw)
 
 
-async def apply_site_placements():
-    """Rumiyo saytida o'tgan daraja testlarini olib: darajani saqlaydi, natijani yuboradi, 'hozir/ertaga' qaroriga qarab davom ettiradi."""
+def site_cursor(data, key):
+    """Sayt bazasi qayta yaratilgan bo'lsa (Render qayta ishga tushdi) "o'qilgan raqam"ni nolga qaytaradi. Joriy raqamni qaytaradi."""
+    last = int(meta_get(key) or 0)
+    ep = (data or {}).get("epoch")
+    seq = (data or {}).get("seq")
+    old_ep = meta_get("site_epoch")
+    reset = False
+    if ep and old_ep and old_ep != ep:
+        reset = True
+    elif isinstance(seq, int) and seq < last:
+        reset = True
+    if ep and old_ep != ep:
+        meta_set("site_epoch", ep)
+    if reset:
+        print(f"sayt bazasi yangilangan: {key} {last} -> 0")
+        meta_set("siteres_pl", "0")
+        meta_set("siteres_last", "0")
+        return 0, True
+    return last, False
+
+
+async def site_get(path, params):
+    async with aiohttp.ClientSession() as http, http.get(
+            RUMIYO_URL.rstrip("/") + path, params=params, headers={"X-Secret": TALK_SECRET},
+            timeout=aiohttp.ClientTimeout(total=25)) as r:
+        return await r.json() if r.status == 200 else {}
+
+
+async def apply_site_placements(force_uid=None):
+    """Rumiyo saytida o'tgan daraja testlarini olib: darajani saqlaydi, natijani yuboradi, 'hozir/ertaga' qaroriga qarab davom ettiradi.
+    force_uid: o'quvchi «Darsni boshlash»ni bosdi, natijasini raqamga qaramay to'g'ridan-to'g'ri so'raymiz."""
     if not (RUMIYO_URL and TALK_SECRET):
         return
-    last = int(meta_get("siteres_pl") or 0)
-    async with aiohttp.ClientSession() as http, http.get(
-            RUMIYO_URL.rstrip("/") + "/admin/placements", params={"after": last}, headers={"X-Secret": TALK_SECRET},
-            timeout=aiohttp.ClientTimeout(total=25)) as r:
-        data = await r.json() if r.status == 200 else {}
+    if force_uid:
+        data = await site_get("/admin/placements", {"u": force_uid})
+        last = None
+    else:
+        data = await site_get("/admin/placements", {"after": int(meta_get("siteres_pl") or 0)})
+        last, reset = site_cursor(data, "siteres_pl")
+        if reset:
+            data = await site_get("/admin/placements", {"after": 0})      # raqam nolga qaytdi: yangi natijalarni qayta so'raymiz
     for it in data.get("results", []):
-        last = max(last, int(it["id"]))
-        meta_set("siteres_pl", str(last))
+        if last is not None:
+            last = max(last, int(it["id"]))
+            meta_set("siteres_pl", str(last))
         uid = int(it["u"])
         try:
             if user(uid)[1]:
                 continue                       # daraja allaqachon bor
+            if force_uid and it.get("ts") and now() - int(it["ts"]) > 7200:
+                continue                       # eski natija (masalan, nolga qaytarishdan oldingi) qayta tiklanmasin
             res = result_text(it.get("raw") or "")
             if not res:
                 continue
@@ -1431,11 +1489,10 @@ async def site_results_loop():
             print("sayt daraja so'rovi:", type(e).__name__)
         try:
             if RUMIYO_URL and TALK_SECRET:
-                last = int(meta_get("siteres_last") or 0)
-                async with aiohttp.ClientSession() as http, http.get(
-                        RUMIYO_URL.rstrip("/") + "/admin/results", params={"after": last}, headers={"X-Secret": TALK_SECRET},
-                        timeout=aiohttp.ClientTimeout(total=25)) as r:
-                    data = await r.json() if r.status == 200 else {}
+                data = await site_get("/admin/results", {"after": int(meta_get("siteres_last") or 0)})
+                last, reset = site_cursor(data, "siteres_last")
+                if reset:
+                    data = await site_get("/admin/results", {"after": 0})
                 for it in data.get("results", []):
                     last = max(last, int(it["id"]))
                     meta_set("siteres_last", str(last))
