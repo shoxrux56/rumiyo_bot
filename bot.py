@@ -5593,6 +5593,27 @@ async def cmd_week_ai(m: Message):
         inline_keyboard=[[InlineKeyboardButton(text="🗣 Rumiyo bilan sinov", web_app=WebAppInfo(url=wk_link(m.from_user.id)))]]))
 
 
+@dp.message(Command("klip_zip"))
+async def cmd_clips_zip(m: Message):
+    """Admin: saytda yaratilgan tayyor salom yozuvlarini zip qilib oladi (GitHub'dagi clips/ papkasiga bir marta qo'yish uchun)."""
+    if not is_admin(m.from_user.id):
+        return
+    if not (RUMIYO_URL.startswith("https://") and TALK_SECRET):
+        return await m.answer("RUMIYO_URL (https://...) va TALK_SECRET kerak.")
+    try:
+        async with aiohttp.ClientSession() as http, http.get(RUMIYO_URL.rstrip("/") + "/admin/clips.zip", headers={"X-Secret": TALK_SECRET},
+                                                             timeout=aiohttp.ClientTimeout(total=60)) as r:
+            data = await r.read()
+            n = r.headers.get("X-Count", "?")
+            if r.status != 200:
+                return await m.answer(f"Sayt javobi: {r.status}")
+    except Exception as e:
+        return await m.answer(f"Olinmadi: {type(e).__name__}")
+    if n == "0":
+        return await m.answer("Hali tayyor yozuv yaratilmagan (kalitlar kelgach sayt 1–3 daqiqada yaratadi). Keyinroq qayta urinib ko'ring.")
+    await m.answer_document(BufferedInputFile(data, filename="clips.zip"), caption=f"{n} ta fayl. Zipni oching va ichidagilarni saytingiz repozitoriyasidagi clips/ papkasiga qo'yib GitHub'ga yuklang.")
+
+
 @dp.message(Command("ovoz"))
 async def cmd_voice(m: Message):
     """Admin: ovozli eslatmani o'zingizga sinab ko'rish. /ovoz missed | comeback | last"""
