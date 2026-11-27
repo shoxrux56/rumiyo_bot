@@ -880,7 +880,7 @@ SPEAK_TIPS = [
     "🗣 Endi o'rganganingizni gapirib mashq qiling: «Suhbat» tugmasini bosing. Gapirmasdan til o'rganilmaydi!",
     "🗣 Dars tugadi, endi gapirish vaqti! «Suhbat» da bugungi darsdagi so'zlarni ishlatib ko'ring.",
     "🗣 Bilganingizni ovoz chiqarib ayting: «Suhbat» ga kiring, hatto bitta jumla ham foyda beradi.",
-    "🗣 O'qish yetarli emas: til gapirganda o'rganiladi. «Suhbat» da 5 daqiqa mashq qiling.",
+    "🗣 O'qish yetarli emas: til gapirganda o'rganiladi. «Suhbat» da 10 daqiqa mashq qiling.",
     "🗣 Har darsdan keyin gaplashing: shunda so'zlar xotirada qoladi. «Suhbat» tugmasi sizni kutyapti!",
     "🗣 Xato qilishdan qo'rqmang: xatolar orqali o'rganiladi. «Suhbat» da bugungi darsni gapirib sinab ko'ring.",
     "🗣 Bugungi darsni «Suhbat» da qo'llang. Eng tez o'rganadiganlar har darsdan keyin gaplashadi.",
@@ -1224,7 +1224,7 @@ async def got_lesson_test(m, uid, res, via_site=False):
     finish_lesson(uid, lid)
     await m.answer(f"✅ Zo'r! Natija: {s}/{n}. {_lv} · {_no}-dars tugadi." + speak_tip(uid, was) + review_tip(), reply_markup=main_menu())
     if RUMIYO_URL and TALK_SECRET and (is_paid(uid) or is_admin(uid)) and not via_site:
-        await m.answer(f"🗣 Bugun o'rganganingizni o'zingiz tanlagan ustoz bilan {'inglizcha' if ulang(uid) == 'en' else 'ruscha'} gaplashib mustahkamlang (5 daqiqa). Ustozni tanlaysiz: do'stona, jahldor, ehtirosli yoki shirin so'z 🙂",
+        await m.answer(f"🗣 Bugun o'rganganingizni o'zingiz tanlagan ustoz bilan {'inglizcha' if ulang(uid) == 'en' else 'ruscha'} gaplashib mustahkamlang (10 daqiqa). Ustozni tanlaysiz: do'stona, jahldor, ehtirosli yoki shirin so'z 🙂",
                        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🗣 AI bilan suhbat", web_app=WebAppInfo(url=rm_link(uid, lesson, s, n)))]]))
     try:
         if level_finished(uid, _lv) and _lv in EXAM_LEVELS and not meta_get(f"ex{uid}_{ulang(uid)}_{_lv}"):
@@ -3716,11 +3716,11 @@ async def menu_talk(m: Message):
     if RUMIYO_URL and TALK_SECRET and os.getenv("SUHBAT_ON") != "1":
         # Hozircha «Suhbat» tugmasi Rumiyo (AI ustoz) ni ochadi. Odam bilan suhbatni qaytarish: Environment ga SUHBAT_ON=1 qo'shing.
         if not (is_paid(uid) or is_admin(uid)):
-            return await m.answer("🗣 AI ustoz bilan ovozli suhbat — VIP uchun.\n\nVIP bilan: kuniga 5 daqiqa jonli suhbat, istalgancha dars va ikkala til (rus + ingliz).\n"
+            return await m.answer("🗣 AI ustoz bilan ovozli suhbat — VIP uchun.\n\nVIP bilan: kuniga 10 daqiqa jonli suhbat, istalgancha dars va ikkala til (rus + ingliz).\n"
                                   "Oddiy darslar esa bepul davom etadi 🙂", reply_markup=pro_kb())
         cur = current(uid)[1] or (0, "", None)
         return await m.answer(f"🗣 Suhbat\n\nRumiyo ustoz bilan {'inglizcha' if ulang(uid) == 'en' else 'ruscha'} gaplashing. Ustozni o'zingiz tanlaysiz: 😊 do'stona, 😠 jahldor, 🔥 ehtirosli yoki 🍯 shirin so'z. U bugungi darsni so'raydi. "
-                              "Kuniga 5 daqiqa (VIP).",
+                              "Kuniga 10 daqiqa (VIP).",
                               reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="🗣 Rumiyo bilan gaplashish", web_app=WebAppInfo(url=rm_link(uid, cur, 0, 0)))]]))
     if not (TALK_URL and TALK_SECRET):
         return await m.answer("🗣 Suhbat bo'limi tez orada ochiladi.")
