@@ -229,9 +229,18 @@ def placement_site(uid):
 
 def pl_link(uid):
     import base64, hashlib, hmac
-    body = base64.urlsafe_b64encode(json.dumps({"u": uid, "l": "A1", "e": int(time.time()) + 86400, "d": 0, "g": ulang(uid), "t": "Daraja testi", "s": 0, "n": 0,
-                                                "v": 0, "h": 3, "tx": webapp_for(uid), "o": (user(uid)[0] or "")[:40]},
-                                               separators=(",", ":"), ensure_ascii=False).encode()).decode().rstrip("=")
+    vip = bool(is_paid(uid) or is_admin(uid))
+    fl = {}
+    if vip:      # VIP: test tugagach Rumiyo sayti o'quvchini bot orqali aylantirmay, shu daraja birinchi darsiga to'g'ridan-to'g'ri yuboradi
+        for lv in LEVELS:
+            ls = lessons_of(eff(lv), ulang(uid))
+            if ls and ls[0][1]:
+                fl[lv] = [ls[0][0], ls[0][1]]
+    tok = {"u": uid, "l": "A1", "e": int(time.time()) + 86400, "d": 0, "g": ulang(uid), "t": "Daraja testi", "s": 0, "n": 0,
+           "v": 1 if vip else 0, "h": 3, "tx": webapp_for(uid), "o": (user(uid)[0] or "")[:40]}
+    if fl:
+        tok["fl"], tok["p"] = fl, int(PASS * 100)
+    body = base64.urlsafe_b64encode(json.dumps(tok, separators=(",", ":"), ensure_ascii=False).encode()).decode().rstrip("=")
     sig = hmac.new(TALK_SECRET.encode(), body.encode(), hashlib.sha256).hexdigest()
     return f"{RUMIYO_URL.rstrip('/')}/?t={body}.{sig}"
 
