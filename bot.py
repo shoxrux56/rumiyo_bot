@@ -5446,13 +5446,8 @@ def en_a0_import():
     # A1: «IN, ON, AT» darsi 10-kundan keyin turadi (A1 kunlariga ham tartib raqami beriladi)
     for d in range(1, 16):
         db.execute("UPDATE lessons SET ord=? WHERE url=? AND lang='en'", (float(d), f"{base}?d={d}"))
-    u1, t1 = f"{base}a1-1/", f"{base}a1-1-test/"
-    r = db.execute("SELECT id FROM lessons WHERE url=?", (u1,)).fetchone()
-    if r:
-        db.execute("UPDATE lessons SET level='A1', test_url=?, topic=?, lang='en', ord=10.5 WHERE id=?", (t1, "IN, ON, AT", r[0]))
-    else:
-        db.execute("INSERT INTO lessons(level, url, test_url, topic, lang, ord) VALUES('A1', ?, ?, ?, 'en', 10.5)", (u1, t1, "IN, ON, AT"))
-        added += 1
+    # «IN, ON, AT» (a1-1) darsi A1 ro'yxatida kerak emas: qo'shilmaydi, bor bo'lsa olib tashlanadi
+    db.execute("DELETE FROM lessons WHERE url=? AND lang='en'", (f"{base}a1-1/",))
     db.commit()
     return added
 
