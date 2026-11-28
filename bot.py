@@ -5466,7 +5466,8 @@ async def cmd_site_check(m: Message):
         f"{ok(TALK_SECRET)} TALK_SECRET qo'yilgan" + ("" if TALK_SECRET else " — saytdagi bilan bir xil maxfiy so'z kerak"),
         f"{ok(os.getenv('SUHBAT_ON') != '1')} SUHBAT_ON o'chiq" + ("" if os.getenv("SUHBAT_ON") != "1" else " — shu o'zgaruvchini o'chiring"),
         f"{ok(os.getenv('INTRO_OFF') != '1')} INTRO_OFF o'chiq" + ("" if os.getenv("INTRO_OFF") != "1" else " — shu o'zgaruvchini o'chiring"),
-        f"{ok(is_paid(uid) or is_admin(uid) or SITE_ALL)} Siz VIP/admin (yoki SITE_ALL=1)",
+        f"{ok(is_paid(uid) or is_admin(uid))} Siz VIP/admin (shuning uchun sizda ishlaydi)",
+        f"{ok(SITE_ALL)} SITE_ALL=1: hamma foydalanuvchi (bepul ham) Rumiyo saytida o'tadi" + ("" if SITE_ALL else " — qo'shilmagan: hozir faqat VIP/admin uchun"),
         "",
         ("✅ Hammasi joyida: /dars dagi «📖 Darsni ochish» darsni Rumiyo saytida ochadi." if site_lessons(uid)
          else "❌ Shartlar bajarilmagan: «📖 Darsni ochish» darsni to'g'ridan-to'g'ri trenerda ochadi (Rumiyo bilan suhbatsiz)."),
