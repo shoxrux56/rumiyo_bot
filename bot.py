@@ -30,6 +30,8 @@ def tune_db():
         db.execute("PRAGMA synchronous=NORMAL")
         db.execute("PRAGMA busy_timeout=5000")
         db.execute("PRAGMA temp_store=MEMORY")
+        db.execute("PRAGMA cache_size=-32000")      # 32 MB xotira keshi: qayta-qayta o'qish diskka tushmaydi
+        db.execute("PRAGMA mmap_size=134217728")
     except sqlite3.Error as e:
         print("PRAGMA o'rnatilmadi:", e)
 
@@ -91,6 +93,15 @@ def migrate():
     # Rumiyo AI ni o'qitish: "odam shu desa -> Rumiyo shu desin" juftliklari (asosiy nusxa shu yerda, zaxira kanaliga ham ketadi)
     db.execute("CREATE TABLE IF NOT EXISTS rm_pairs(id INTEGER PRIMARY KEY AUTOINCREMENT, q TEXT NOT NULL, a TEXT NOT NULL, "
                "tone INTEGER DEFAULT 1, ts INTEGER DEFAULT 0, UNIQUE(q, a))")
+    for ix in ("CREATE INDEX IF NOT EXISTS ix_users_notify ON users(notified, next_at)",
+               "CREATE INDEX IF NOT EXISTS ix_lessons_lv ON lessons(level, lang)",
+               "CREATE INDEX IF NOT EXISTS ix_pay_user ON payments(user_id)",
+               "CREATE INDEX IF NOT EXISTS ix_ref_inv ON referrals(inviter)",
+               "CREATE INDEX IF NOT EXISTS ix_rm_q ON rm_pairs(q)"):
+        try:
+            db.execute(ix)
+        except sqlite3.Error as e:
+            print("indeks:", e)
     db.commit()
 
 
@@ -3144,6 +3155,23 @@ def snapshot(path):
     dst.close()
 
 
+def _snapshot_thread(path):
+    """Alohida ulanish bilan (WAL: yozuvchi to'xtamaydi). Asosiy oqimda chaqirilmaydi."""
+    src = sqlite3.connect(DB_PATH)
+    dst = sqlite3.connect(path)
+    try:
+        src.backup(dst)
+    finally:
+        dst.close()
+        src.close()
+
+
+async def snapshot_async(path):
+    if DB_PATH == ":memory:":
+        return snapshot(path)
+    await asyncio.to_thread(_snapshot_thread, path)
+
+
 async def backup_to_channel(force=False):
     """None: yuborilmadi (kanal yo'q / baza bo'sh). True: yuborildi va qadaldi. False: yuborildi, lekin qadalmadi."""
     cid = get_backup_chat()
@@ -3153,7 +3181,7 @@ async def backup_to_channel(force=False):
         return True
     os.makedirs(BACKUP_DIR, exist_ok=True)
     path = os.path.join(BACKUP_DIR, "kanal-zaxira.db")
-    snapshot(path)
+    await snapshot_async(path)
     now_l = datetime.now(TZ)
     today = now_l.strftime("%Y-%m-%d")
     nu = db.execute("SELECT COUNT(*) FROM users").fetchone()[0]
@@ -3596,24 +3624,6 @@ async def cmd_set_level(m: Message):  # faqat admin: /daraja 123456789 A1 [ru|en
             await push_lesson(uid)
     except Exception:
         pass
-
-
-async def cmd_restart_me(m: Message):  # faqat admin: o'zini yangi o'quvchidek sinash (darslar va A0 savollari qaytadan)
-    uid = m.from_user.id
-    if not is_admin(uid):
-        return
-    db.execute("DELETE FROM progress WHERE user_id=?", (uid,))
-    db.execute("DELETE FROM meta WHERE k=?", (f"pl{uid}",))
-    arg = (m.text or "").split(maxsplit=1)[1].strip().upper() if len((m.text or "").split(maxsplit=1)) > 1 else "A0"
-    lvl = arg if arg in LEVELS else "A0"
-    db.execute("INSERT INTO users(user_id, level) VALUES(?, ?) ON CONFLICT(user_id) DO UPDATE SET level=excluded.level, next_at=0, notified=1",
-               (uid, lvl))
-    db.commit()
-    goal, level = user(uid)
-    await m.answer(f"♻️ Sinash uchun boshidan boshlandi (daraja: {level}). Darslaringiz tozalandi.\n"
-                   "Boshqa daraja: /boshidan B1")
-    if level:
-        await show_lesson(m, uid)
 
 
 async def send_safe(coro_fn, tries=3):
@@ -5454,24 +5464,6 @@ def fix_wrong_a0():
     return n
 
 
-async def cmd_days(m: Message):  # faqat admin: 401 kunlik darslarni bazaga qo'shadi
-    if not is_admin(m.from_user.id):
-        return
-    added, upd = trener_import()
-    cnt = {lv: len(lessons_of(lv)) for lv in LEVELS}
-    base = TRENER_URL.rstrip("/") + "/"
-    other = db.execute("SELECT level, COUNT(*) FROM lessons WHERE url NOT LIKE ? AND COALESCE(lang,'ru')='ru' GROUP BY level", (base + "?d=%",)).fetchall()
-    warn = ("\n\n⚠️ Boshqa manzilli ESKI darslar bor: " + ", ".join(f"{a}: {b}" for a, b in other) +
-            ". Ular ro'yxatni uzaytiryapti. Admin paneldan o'chiring yoki ayting, tozalash buyrug'ini qo'shaman.") if other else ""
-    await m.answer(f"✅ Kunlar qo'shildi: yangi {added} ta, yangilangani {upd} ta.\n"
-                   "Bazadagi darslar: " + ", ".join(f"{k}: {v}" for k, v in cnt.items()) +
-                   f"\nManzil: {TRENER_URL}" + warn)
-
-
-EN_A0 = [(1, "Harf yomg'iri: ingliz harflari"), (2, "Ingliz raqamlari"), (3, "Hello! Birinchi so'zlar"),
-         (5, "Oila a'zolari"), (6, "Ingliz tili o'yini")]  # a0-4 sahifasi a0-3 bilan bir xil, shuning uchun olinmaydi
-
-
 def en_a0_import():
     """Ingliz A0 darslari (harflar, raqamlar, birinchi so'zlar): har biri alohida sahifa va testi bilan. Qayta ishlatsa ikkilanmaydi."""
     base = EN_TRENER_URL.rstrip("/") + "/"
@@ -5534,15 +5526,6 @@ async def cmd_lesson_del(m: Message):
         db.execute("DELETE FROM lessons WHERE id=?", (lid,))
     db.commit()
     await m.answer("🗑 O'chirildi:\n" + "\n".join(f"{lv} · {u}" for _, lv, u in rows))
-
-
-async def cmd_days_en(m: Message):  # faqat admin: ingliz Trener kunlarini (251) bazaga qo'shadi
-    if not is_admin(m.from_user.id):
-        return
-    added, upd = trener_import("en")
-    added += en_a0_import()
-    n = db.execute("SELECT COUNT(*) FROM lessons WHERE lang='en'").fetchone()[0]
-    await m.answer(f"✅ Ingliz kunlari: yangi {added} ta, yangilangani {upd} ta. Jami ingliz darslari: {n}\nManzil: {EN_TRENER_URL}")
 
 
 @dp.message(Command("joyla"))
@@ -5669,26 +5652,6 @@ async def cmd_week_ai(m: Message):
         return await m.answer("RUMIYO_URL (https://...) va TALK_SECRET kerak.")
     await m.answer("🗣 Haftalik sinov (Rumiyo bilan, ~10 daqiqa):", reply_markup=InlineKeyboardMarkup(
         inline_keyboard=[[InlineKeyboardButton(text="🗣 Rumiyo bilan sinov", web_app=WebAppInfo(url=wk_link(m.from_user.id)))]]))
-
-
-async def cmd_clips_zip(m: Message):
-    """Admin: saytda yaratilgan tayyor salom yozuvlarini zip qilib oladi (GitHub'dagi clips/ papkasiga bir marta qo'yish uchun)."""
-    if not is_admin(m.from_user.id):
-        return
-    if not (RUMIYO_URL.startswith("https://") and TALK_SECRET):
-        return await m.answer("RUMIYO_URL (https://...) va TALK_SECRET kerak.")
-    try:
-        async with aiohttp.ClientSession() as http, http.get(RUMIYO_URL.rstrip("/") + "/admin/clips.zip", headers={"X-Secret": TALK_SECRET},
-                                                             timeout=aiohttp.ClientTimeout(total=60)) as r:
-            data = await r.read()
-            n = r.headers.get("X-Count", "?")
-            if r.status != 200:
-                return await m.answer(f"Sayt javobi: {r.status}")
-    except Exception as e:
-        return await m.answer(f"Olinmadi: {type(e).__name__}")
-    if n == "0":
-        return await m.answer("Hali tayyor yozuv yaratilmagan (kalitlar kelgach sayt 1–3 daqiqada yaratadi). Keyinroq qayta urinib ko'ring.")
-    await m.answer_document(BufferedInputFile(data, filename="clips.zip"), caption=f"{n} ta fayl. Zipni oching va ichidagilarni saytingiz repozitoriyasidagi clips/ papkasiga qo'yib GitHub'ga yuklang.")
 
 
 @dp.message(Command("ovoz"))
