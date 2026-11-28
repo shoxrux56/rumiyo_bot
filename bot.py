@@ -1671,7 +1671,7 @@ async def admin_cb(c: CallbackQuery):
         await edit(c, "🧠 Yangi gap · 1/2\n\nODAM nima deydi? Shuni yozing (ruscha yoki o'zbekcha).\nMasalan: Salom\n\n"
                       "Bir yo'la ko'p qo'shish: har qatorga bittadan, o'rtasiga => qo'ying:\nSalom => Yana kech keldingmi, necha marta aytdim!",
                    kb_of([("❌ Bekor qilish", "adm:rm")]))
-    elif act == "rms" and p[2] in ("#laqab", "#qoida", "#jahl", "#dostona", "#ehtiros", "#shirin"):
+    elif act == "rms" and p[2] in ("#laqab", "#qoida", "#jahl", "#iliq", "#qattiq", "#dostona", "#ehtiros", "#shirin"):
         pending[uid] = ("rms", p[2])
         n = db.execute("SELECT COUNT(*) FROM rm_pairs WHERE q=?", (p[2],)).fetchone()[0]
         if p[2] == "#jahl":
@@ -1681,8 +1681,10 @@ async def admin_cb(c: CallbackQuery):
         elif p[2] == "#laqab":
             msg = (f"🏷 Laqablar (hozir {n} ta)\n\nRumiyo har odamga shu ro'yxatdan har kuni BOSHQA laqab beradi va jahl bilan shu laqab bilan chaqiradi.\n"
                    "Laqablarni yuboring, har qatorga bittadan. Masalan:\nKalla-xon\nDangasa-aka\nJannat-xonim")
-        elif p[2] in ("#dostona", "#ehtiros", "#shirin"):
-            nm, em, ex = {"#dostona": ("Do'stona ustoz", "😊", "Voy jonim, buni qara-ya, qoyil!\nHechqisi yo'q, azizim, hamma shundan o'tadi.\nYana bir marta ayt-chi, men ishonaman senga!"),
+        elif p[2] in ("#iliq", "#qattiq", "#dostona", "#ehtiros", "#shirin"):
+            nm, em, ex = {"#iliq": ("Iliq (mehribon) Rumiyo", "😊", "Voy jonim, emmm... buni qara-ya, qoyil!\nHechqisi yo'q, azizim, hamma shundan o'tadi.\nYana bir marta ayt-chi, men ishonaman senga!"),
+                          "#qattiq": ("Qattiq (talabchan) Rumiyo", "😤", "Eee, yana xato! Emmm... yana bir marta, diqqat bilan!\nBo'ldi, to'xta. Mana buni to'g'ri ayt.\nYaxshi, mana endi odamga o'xshading."),
+                          "#dostona": ("Do'stona ustoz", "😊", "Voy jonim, buni qara-ya, qoyil!\nHechqisi yo'q, azizim, hamma shundan o'tadi.\nYana bir marta ayt-chi, men ishonaman senga!"),
                           "#ehtiros": ("Ehtirosli ustoz", "🔥", "Ahhh, mana shu gap! Yuragim hapriqib ketdi!\nYana, yana, to'xtama, sen buni qila olasan!\nVoy-voy-voy, shunday ham aytiladimi!"),
                           "#shirin": ("Shirin so'z ustoz", "🍯", "Ohh, qanday chiroyli aytdingiz, jonginam!\nHechqisi yo'q, birga qaytaramiz, shoshilmang.\nSizga bu juda yarashadi, davom eting!")}[p[2]]
             msg = (f"{em} {nm} gaplari (hozir {n} ta)\n\nBu ustoz o'quvchi bilan gaplashganda ishlatadigan gaplaringiz: maqtash, hazil, ruhlantirish, tuzatish. Har qatorga bittadan yozing. Masalan:\n"
@@ -2039,8 +2041,7 @@ def rm_view():
             "Gaplar botning bazasida saqlanadi, zaxira kanaliga ham ketadi, server o'chib yonsa bot o'zi qayta yuboradi.",
             kb_of([("➕ Gap qo'shish", "adm:rmadd")], [("🏷 Laqablar", "adm:rms:#laqab"), ("📜 Qoida yozish", "adm:rms:#qoida")],
                   [("😤 Jahl gaplari (koyish)", "adm:rms:#jahl")],
-                  [("😊 Do'stona gaplari", "adm:rms:#dostona"), ("🔥 Ehtirosli gaplari", "adm:rms:#ehtiros")],
-                  [("🍯 Shirin so'z gaplari", "adm:rms:#shirin")],
+                  [("😊 Iliq Rumiyo gaplari", "adm:rms:#iliq"), ("😤 Qattiq Rumiyo gaplari", "adm:rms:#qattiq")],
                   [("📋 Gaplar ro'yxati", "adm:rmlist:0")],
                   [("🔍 Tekshirish (nega ishlamayapti)", "adm:rmtest")],
                   [("⬅️ Orqaga", "adm:home")]))
