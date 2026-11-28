@@ -702,7 +702,6 @@ async def pul_screen(uid):
     return t + "Sizning havolangiz:\n" + link, pul_kb(link, ready)
 
 
-@dp.message(Command("pul", "taklif", "balans"))
 @dp.message(F.text == M_PUL)
 async def cmd_pul(m: Message):
     if not PAID_MODE:
@@ -726,7 +725,6 @@ async def pul_out(c: CallbackQuery):
     await c.answer()
 
 
-@dp.message(Command("yechish"))
 async def cmd_yechish(m: Message):
     uid = m.from_user.id
     if earn_ready(uid)[0] < MIN_PAYOUT:
@@ -800,7 +798,6 @@ async def payout_done(c: CallbackQuery):
     await c.answer("Bajarildi")
 
 
-@dp.message(Command("kod"))
 async def cmd_code(m: Message):
     uid = m.from_user.id
     parts = (m.text or "").split()
@@ -1541,10 +1538,9 @@ ADM_CMDS_RUN = {
     "hafta": ("📅 Hafta", lambda m: cmd_week(m)), "hafta_ai": ("🗣 Haftalik AI sinov", lambda m: cmd_week_ai(m)),
     "sotuv": ("💰 Sotuv statistikasi", lambda m: cmd_sales(m)), "vip_royxat": ("💎 VIP ro'yxati", lambda m: cmd_vip_list(m)),
     "zaxira": ("☁️ Zaxira", lambda m: cmd_backup(m)), "linklar": ("📋 Linklar", lambda m: cmd_links(m)),
-    "ochish": ("🔓 Keyingi darsni ochish", lambda m: cmd_unlock(m)), "boshidan": ("🔄 O'zimni boshidan", lambda m: cmd_restart_me(m)),
-    "kunlar": ("📚 Rus kunlari (401)", lambda m: cmd_days(m)), "kunlar_en": ("📚 Ingliz kunlari (251)", lambda m: cmd_days_en(m)),
-    "klip_zip": ("🎞 Klip zip", lambda m: cmd_clips_zip(m)), "xarakter": ("🎭 Rumiyo xarakteri", lambda m: cmd_character(m)),
-    "nolla": ("♻️ Noldan boshlash (faqat men)", lambda m: reset_all(m)), "vip": ("💎 VIP", lambda m: cmd_pro(m)), "pul": ("💵 Pul / balans", lambda m: cmd_pul(m)),
+    "ochish": ("🔓 Keyingi darsni ochish", lambda m: cmd_unlock(m)),
+    "xarakter": ("🎭 Rumiyo xarakteri", lambda m: cmd_character(m)),
+    "nolla": ("♻️ Noldan boshlash (faqat men)", lambda m: reset_all(m)), "vip": ("💎 VIP", lambda m: cmd_pro(m)),
 }
 ADM_CMDS_ARG = {
     "ruxsat": ("ℹ️ /ruxsat", "/ruxsat 123456789 — o'quvchiga to'lovsiz to'liq ruxsat"),
@@ -3602,7 +3598,6 @@ async def cmd_set_level(m: Message):  # faqat admin: /daraja 123456789 A1 [ru|en
         pass
 
 
-@dp.message(Command("boshidan"))
 async def cmd_restart_me(m: Message):  # faqat admin: o'zini yangi o'quvchidek sinash (darslar va A0 savollari qaytadan)
     uid = m.from_user.id
     if not is_admin(uid):
@@ -5459,7 +5454,6 @@ def fix_wrong_a0():
     return n
 
 
-@dp.message(Command("kunlar"))
 async def cmd_days(m: Message):  # faqat admin: 401 kunlik darslarni bazaga qo'shadi
     if not is_admin(m.from_user.id):
         return
@@ -5542,7 +5536,6 @@ async def cmd_lesson_del(m: Message):
     await m.answer("🗑 O'chirildi:\n" + "\n".join(f"{lv} · {u}" for _, lv, u in rows))
 
 
-@dp.message(Command("kunlar_en"))
 async def cmd_days_en(m: Message):  # faqat admin: ingliz Trener kunlarini (251) bazaga qo'shadi
     if not is_admin(m.from_user.id):
         return
@@ -5678,7 +5671,6 @@ async def cmd_week_ai(m: Message):
         inline_keyboard=[[InlineKeyboardButton(text="🗣 Rumiyo bilan sinov", web_app=WebAppInfo(url=wk_link(m.from_user.id)))]]))
 
 
-@dp.message(Command("klip_zip"))
 async def cmd_clips_zip(m: Message):
     """Admin: saytda yaratilgan tayyor salom yozuvlarini zip qilib oladi (GitHub'dagi clips/ papkasiga bir marta qo'yish uchun)."""
     if not is_admin(m.from_user.id):
