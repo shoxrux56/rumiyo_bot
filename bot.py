@@ -111,6 +111,7 @@ LEVELS = ["A0", "A1", "A2", "B1", "B2", "C1"]
 NAMES = {"v": "lug'at boyligi", "g": "grammatika"}
 LESSON_LEVELS = list(LEVELS)  # A0 ham dars darajasi
 ADMIN_IDS = {int(x) for x in os.getenv("ADMIN_IDS", "").replace(" ", "").split(",") if x.isdigit()}
+SITE_ALL = os.getenv("SITE_ALL") == "1"  # 1 bo'lsa: hamma (bepul ham) darsni Rumiyo saytida o'tadi (salom, dars, suhbat)
 UNLOCK_HOUR = int(os.getenv("UNLOCK_HOUR", "12"))  # keyingi dars shu soatda ochiladi (Toshkent vaqti)
 TZ = timezone(timedelta(hours=5))
 FREE_LESSONS = int(os.getenv("FREE_LESSONS", "1"))  # boshidagi bepul darslar soni
@@ -1163,7 +1164,7 @@ def intro_key(uid):
 def site_lessons(uid):
     """VIP uchun dars Rumiyo saytining ichida o'tadi (salom, trener, test, suhbat)."""
     return bool(RUMIYO_URL and TALK_SECRET and os.getenv("SUHBAT_ON") != "1" and os.getenv("INTRO_OFF") != "1"
-                and (is_paid(uid) or is_admin(uid)))
+                and (is_paid(uid) or is_admin(uid) or SITE_ALL))
 
 
 def intro_pending(uid):
@@ -2220,7 +2221,7 @@ def rm_link(uid, lesson, s, n, intro=False, go=False):
     topic = db.execute("SELECT topic FROM lessons WHERE id=?", (lesson[0],)).fetchone()
     body = base64.urlsafe_b64encode(json.dumps({"u": uid, "l": eff(user(uid)[1]), "e": int(time.time()) + 86400, "d": int(d.group(1)) if d else 0, "g": ulang(uid),
                                                 "t": ((topic[0] if topic else "") or "")[:100], "s": s, "n": n,
-                                                "v": 1 if (is_paid(uid) or is_admin(uid)) else 0, "i": lesson[0], "x": lesson[1] or "",
+                                                "v": 1 if (is_paid(uid) or is_admin(uid) or SITE_ALL) else 0, "i": lesson[0], "x": lesson[1] or "",
                                                 **({"h": 1, "k": current(uid)[2], "p": int(PASS * 100)} if intro else {"h": 2} if go else {})},
                                                separators=(",", ":"), ensure_ascii=False).encode()).decode().rstrip("=")
     sig = hmac.new(TALK_SECRET.encode(), body.encode(), hashlib.sha256).hexdigest()
@@ -5465,7 +5466,7 @@ async def cmd_site_check(m: Message):
         f"{ok(TALK_SECRET)} TALK_SECRET qo'yilgan" + ("" if TALK_SECRET else " — saytdagi bilan bir xil maxfiy so'z kerak"),
         f"{ok(os.getenv('SUHBAT_ON') != '1')} SUHBAT_ON o'chiq" + ("" if os.getenv("SUHBAT_ON") != "1" else " — shu o'zgaruvchini o'chiring"),
         f"{ok(os.getenv('INTRO_OFF') != '1')} INTRO_OFF o'chiq" + ("" if os.getenv("INTRO_OFF") != "1" else " — shu o'zgaruvchini o'chiring"),
-        f"{ok(is_paid(uid) or is_admin(uid))} Siz VIP/admin",
+        f"{ok(is_paid(uid) or is_admin(uid) or SITE_ALL)} Siz VIP/admin (yoki SITE_ALL=1)",
         "",
         ("✅ Hammasi joyida: /dars dagi «📖 Darsni ochish» darsni Rumiyo saytida ochadi." if site_lessons(uid)
          else "❌ Shartlar bajarilmagan: «📖 Darsni ochish» darsni to'g'ridan-to'g'ri trenerda ochadi (Rumiyo bilan suhbatsiz)."),
