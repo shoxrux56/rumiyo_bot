@@ -2222,6 +2222,7 @@ def rm_link(uid, lesson, s, n, intro=False, go=False):
     body = base64.urlsafe_b64encode(json.dumps({"u": uid, "l": eff(user(uid)[1]), "e": int(time.time()) + 86400, "d": int(d.group(1)) if d else 0, "g": ulang(uid),
                                                 "t": ((topic[0] if topic else "") or "")[:100], "s": s, "n": n,
                                                 "v": 1 if (is_paid(uid) or is_admin(uid) or SITE_ALL) else 0, "i": lesson[0], "x": lesson[1] or "",
+                                                **({"rc": "s"} if meta_get(f"rc{uid}") == "s" else {}),
                                                 **({"h": 1, "k": current(uid)[2], "p": int(PASS * 100)} if intro else {"h": 2} if go else {})},
                                                separators=(",", ":"), ensure_ascii=False).encode()).decode().rstrip("=")
     sig = hmac.new(TALK_SECRET.encode(), body.encode(), hashlib.sha256).hexdigest()
@@ -5454,6 +5455,29 @@ def en_a0_import():
     return added
 
 
+def rc_kb(uid):
+    cur = meta_get(f"rc{uid}") == "s"
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=("✅ " if not cur else "") + "🤗 Iliq (standart)", callback_data="rc:w")],
+        [InlineKeyboardButton(text=("✅ " if cur else "") + "😤 Qattiqqo'l ustoz", callback_data="rc:s")]])
+
+
+@dp.message(Command("xarakter"))
+async def cmd_character(m: Message):
+    await m.answer("🎭 Rumiyo qanday ustoz bo'lsin?\n\n🤗 Iliq: yumshoq, rag'batlantiradi, xatoni muloyim tuzatadi.\n😤 Qattiqqo'l: jahldor ustoz, qattiq gapiradi, hazil bilan.",
+                   reply_markup=rc_kb(m.from_user.id))
+
+
+@dp.callback_query(F.data.in_({"rc:w", "rc:s"}))
+async def cb_character(c: CallbackQuery):
+    meta_set(f"rc{c.from_user.id}", "s" if c.data == "rc:s" else "w")
+    try:
+        await c.message.edit_reply_markup(reply_markup=rc_kb(c.from_user.id))
+    except Exception:
+        pass
+    await c.answer("Saqlandi. Keyingi suhbatdan boshlab ishlaydi." if c.data == "rc:s" else "Saqlandi: iliq Rumiyo 🤗")
+
+
 @dp.message(Command("dars_ochir"))
 async def cmd_lesson_del(m: Message):
     """Faqat admin: /dars_ochir <link bo'lagi> — manzilida shu matn bor darslarni (hamma tilda) o'chiradi."""
@@ -5715,7 +5739,7 @@ async def set_menu_commands():
         try:
             await bot.set_my_commands([BotCommand(command="dars", description="📖 Darsni ochish"),
                                        BotCommand(command="vip", description="💎 VIP ga o'tish"),
-                                       BotCommand(command="til", description="🌐 Tilni almashtirish")])
+                                       BotCommand(command="til", description="🌐 Tilni almashtirish"), BotCommand(command="xarakter", description="🎭 Rumiyo xarakteri")])
             # guruhda faqat /oyin ko'rinsin (ilgari /dars va /vip chiqib, odamni chalg'itardi)
             await bot.set_my_commands([BotCommand(command="oyin", description="🎮 Ruscha o'yin (faqat admin)")],
                                       scope=BotCommandScopeAllGroupChats())
