@@ -1805,11 +1805,12 @@ async def admin_cb(c: CallbackQuery):
                        kb_of([("❌ Bekor qilish", f"adm:lv:{lv}")]))
     elif act in ("ls", "ed", "edt", "top", "rm", "rmy"):
         lid = int(p[2])
-        row = db.execute("SELECT level, url, test_url FROM lessons WHERE id=?", (lid,)).fetchone()
+        row = db.execute("SELECT level, url, test_url, COALESCE(lang,'ru') FROM lessons WHERE id=?", (lid,)).fetchone()
         if not row:
             return await c.answer("Dars topilmadi", show_alert=True)
-        lv, url, turl = row
-        n = [x[0] for x in lessons_of(lv)].index(lid) + 1
+        lv, url, turl, llang = row
+        _ids = [x[0] for x in lessons_of(lv, llang)]
+        n = _ids.index(lid) + 1 if lid in _ids else 0
         if act == "ls":
             tpc = (db.execute("SELECT topic FROM lessons WHERE id=?", (lid,)).fetchone() or [None])[0]
             await edit(c, f"{lv} · {n}-dars\n\n📚 Mavzu: {tpc or 'yozilmagan'}\n📖 Dars: {url}\n📝 Test: {turl or 'yoq'}", kb_of(
@@ -5450,6 +5451,26 @@ def en_a0_import():
     db.execute("DELETE FROM lessons WHERE url=? AND lang='en'", (f"{base}a1-1/",))
     db.commit()
     return added
+
+
+@dp.message(Command("dars_ochir"))
+async def cmd_lesson_del(m: Message):
+    """Faqat admin: /dars_ochir <link bo'lagi> — manzilida shu matn bor darslarni (hamma tilda) o'chiradi."""
+    if not is_admin(m.from_user.id):
+        return
+    q = (m.text or "").split(maxsplit=1)
+    q = q[1].strip() if len(q) > 1 else ""
+    if len(q) < 6:
+        return await m.answer("Misol: /dars_ochir shoxrux56.github.io/a1-1/\nManzilda shu matn bor darslar o'chadi.")
+    rows = db.execute("SELECT id, level, url FROM lessons WHERE url LIKE ?", (f"%{q}%",)).fetchall()
+    if not rows:
+        return await m.answer("Bunday manzilli dars topilmadi.")
+    if len(rows) > 3:
+        return await m.answer(f"Juda ko'p dars mos keldi ({len(rows)}). Manzilni aniqroq yozing.")
+    for lid, lv, u in rows:
+        db.execute("DELETE FROM lessons WHERE id=?", (lid,))
+    db.commit()
+    await m.answer("🗑 O'chirildi:\n" + "\n".join(f"{lv} · {u}" for _, lv, u in rows))
 
 
 @dp.message(Command("kunlar_en"))
