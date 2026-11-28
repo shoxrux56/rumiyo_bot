@@ -1544,7 +1544,7 @@ ADM_CMDS_RUN = {
     "ochish": ("🔓 Keyingi darsni ochish", lambda m: cmd_unlock(m)), "boshidan": ("🔄 O'zimni boshidan", lambda m: cmd_restart_me(m)),
     "kunlar": ("📚 Rus kunlari (401)", lambda m: cmd_days(m)), "kunlar_en": ("📚 Ingliz kunlari (251)", lambda m: cmd_days_en(m)),
     "klip_zip": ("🎞 Klip zip", lambda m: cmd_clips_zip(m)), "xarakter": ("🎭 Rumiyo xarakteri", lambda m: cmd_character(m)),
-    "vip": ("💎 VIP", lambda m: cmd_pro(m)), "pul": ("💵 Pul / balans", lambda m: cmd_pul(m)),
+    "nolla": ("♻️ Noldan boshlash (faqat men)", lambda m: reset_all(m)), "vip": ("💎 VIP", lambda m: cmd_pro(m)), "pul": ("💵 Pul / balans", lambda m: cmd_pul(m)),
 }
 ADM_CMDS_ARG = {
     "ruxsat": ("ℹ️ /ruxsat", "/ruxsat 123456789 — o'quvchiga to'lovsiz to'liq ruxsat"),
@@ -1554,7 +1554,6 @@ ADM_CMDS_ARG = {
     "promo": ("ℹ️ /promo", "/promo KOD CHEGIRMA% KOMISSIYA% [EGASI_ID] — promokod yaratish"),
     "ovoz": ("ℹ️ /ovoz", "/ovoz missed | comeback | last — ovozli eslatmani sinash"),
     "ovoz_qosh": ("ℹ️ /ovoz_qosh", "/ovoz_qosh missed {name}, nega kirmading? — eslatma gapi qo'shish"),
-    "hammasini_nolla": ("⚠️ /hammasini_nolla", "/hammasini_nolla — HAMMA o'quvchi progressini nolga tushiradi. Xavfli, shuning uchun tugma yo'q: faqat qo'lda yozing."),
 }
 
 
@@ -1611,29 +1610,33 @@ async def edit(c: CallbackQuery, text, kb):
         pass
 
 
-@dp.message(Command("hammasini_nolla"))
+@dp.message(Command("nolla", "hammasini_nolla"))
 async def reset_all(m: Message):
-    """Admin: hamma foydalanuvchi (o'zingiz ham) noldan boshlaydi. Darslar, promokodlar, kalitlar va sozlamalar qoladi."""
-    if not is_admin(m.from_user.id):
+    """Admin: FAQAT o'zining ma'lumotlarini (bot va Rumiyo sayti) to'liq o'chiradi: noldan sinash uchun. Boshqa foydalanuvchilarga tegmaydi."""
+    uid = m.from_user.id
+    if not is_admin(uid):
         return
-    if (m.text or "").split(maxsplit=1)[1:] != ["HA"]:
-        n = db.execute("SELECT COUNT(*) FROM users").fetchone()[0]
-        v = db.execute("SELECT COUNT(*) FROM users WHERE paid=1").fetchone()[0]
-        return await m.answer(f"⚠️ {n} ta foydalanuvchi ({v} ta VIP), ularning darajasi, to'lovlari, takliflari va pullari O'CHADI.\n"
-                              "Darslar, promokodlar, kalitlar qoladi. Avval zaxira fayl yuboriladi.\n\n"
-                              "Tasdiqlash uchun yozing:\n/hammasini_nolla HA")
-    path = os.path.join(BACKUP_DIR, "tozalashdan-oldin.db")
-    os.makedirs(BACKUP_DIR, exist_ok=True)
-    snapshot(path)
-    await m.answer_document(FSInputFile(path, filename="tozalashdan-oldin.db"), caption="💾 Eski baza. Saqlab qo'ying (kerak bo'lsa qaytarsa bo'ladi).")
-    for t in ("users", "progress", "payments", "pay_wait", "talk_use", "referrals", "payouts", "earnings", "user_promo"):
-        db.execute(f"DELETE FROM {t}")
+    for t, col in (("users", "user_id"), ("progress", "user_id"), ("payments", "user_id"), ("pay_wait", "user_id"), ("talk_use", "user_id"),
+                   ("referrals", "invited"), ("payouts", "user_id"), ("earnings", "user_id"), ("user_promo", "user_id")):
+        try:
+            db.execute(f"DELETE FROM {t} WHERE {col}=?", (uid,))
+        except Exception as e:
+            print("nolla", t, type(e).__name__)
     for (k,) in db.execute("SELECT k FROM meta").fetchall():
-        if re.search(r"\d{5,}$", k):                      # foydalanuvchiga tegishli belgilar (sk123456, plsent123456 ...)
+        if re.search(r"[A-Za-z_]+%d$" % uid, k):                  # faqat shu adminga tegishli belgilar (sk123, pl123, rc123 ...)
             db.execute("DELETE FROM meta WHERE k=?", (k,))
     db.commit()
-    seen_users.clear(); flood.clear(); sub_ok.clear(); sub_in.clear()
-    await m.answer("✅ Hamma noldan boshladi. Endi /start bosing: o'zingiz ham yangi foydalanuvchisiz.", reply_markup=ReplyKeyboardRemove())
+    pending.pop(uid, None); seen_users.discard(uid)
+    site = "sayt: ulanmagan"
+    if RUMIYO_URL and TALK_SECRET:
+        try:
+            async with aiohttp.ClientSession() as http, http.post(RUMIYO_URL.rstrip("/") + "/admin/reset_user", headers={"X-Secret": TALK_SECRET},
+                                                                  json={"uid": uid}, timeout=aiohttp.ClientTimeout(total=20)) as r:
+                site = "sayt: tozalandi ✅" if r.status == 200 else f"sayt: javob {r.status} ⚠️ (server yangi kodda emas?)"
+        except Exception as e:
+            site = "sayt: yetib bormadi ⚠️"
+    await m.answer(f"♻️ Faqat sizning ma'lumotlaringiz o'chdi (bot + {site}). Boshqa foydalanuvchilarga tegilmadi.\nEndi /start bosing: yangi o'quvchidek boshlaysiz.",
+                   reply_markup=ReplyKeyboardRemove())
 
 
 @dp.message(Command("admin"))
