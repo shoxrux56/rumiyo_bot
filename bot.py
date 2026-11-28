@@ -5453,6 +5453,26 @@ def en_a0_import():
     return added
 
 
+@dp.message(Command("sayt"))
+async def cmd_site_check(m: Message):
+    """Faqat admin: dars nega Rumiyo saytida ochilmayotganini ko'rsatadi (qiymatlarni ko'rsatmaydi)."""
+    if not is_admin(m.from_user.id):
+        return
+    uid = m.from_user.id
+    ok = lambda v: "✅" if v else "❌"
+    lines = [
+        f"{ok(RUMIYO_URL)} RUMIYO_URL (yoki TALK_URL) qo'yilgan" + (f": {RUMIYO_URL}" if RUMIYO_URL else " — Bot-xosting Sozlamalariga saytingiz manzilini qo'shing"),
+        f"{ok(TALK_SECRET)} TALK_SECRET qo'yilgan" + ("" if TALK_SECRET else " — saytdagi bilan bir xil maxfiy so'z kerak"),
+        f"{ok(os.getenv('SUHBAT_ON') != '1')} SUHBAT_ON o'chiq" + ("" if os.getenv("SUHBAT_ON") != "1" else " — shu o'zgaruvchini o'chiring"),
+        f"{ok(os.getenv('INTRO_OFF') != '1')} INTRO_OFF o'chiq" + ("" if os.getenv("INTRO_OFF") != "1" else " — shu o'zgaruvchini o'chiring"),
+        f"{ok(is_paid(uid) or is_admin(uid))} Siz VIP/admin",
+        "",
+        ("✅ Hammasi joyida: /dars dagi «📖 Darsni ochish» darsni Rumiyo saytida ochadi." if site_lessons(uid)
+         else "❌ Shartlar bajarilmagan: «📖 Darsni ochish» darsni to'g'ridan-to'g'ri trenerda ochadi (Rumiyo bilan suhbatsiz)."),
+    ]
+    await m.answer("\n".join(lines), disable_web_page_preview=True)
+
+
 @dp.message(Command("dars_ochir"))
 async def cmd_lesson_del(m: Message):
     """Faqat admin: /dars_ochir <link bo'lagi> — manzilida shu matn bor darslarni (hamma tilda) o'chiradi."""
