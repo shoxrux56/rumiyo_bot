@@ -1169,7 +1169,7 @@ def site_lessons(uid):
 
 def intro_pending(uid):
     """Bugun Rumiyo bilan kirish suhbati hali bo'lmagan bo'lsa True."""
-    return site_lessons(uid) and not meta_get(intro_key(uid))
+    return site_lessons(uid) and (is_admin(uid) or not meta_get(intro_key(uid)))   # admin sinab ko'rishi uchun har safar salomlashuv bilan boshlanadi
 
 
 @dp.callback_query(F.data == "intro:skip")
