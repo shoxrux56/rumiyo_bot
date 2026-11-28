@@ -111,7 +111,7 @@ LEVELS = ["A0", "A1", "A2", "B1", "B2", "C1"]
 NAMES = {"v": "lug'at boyligi", "g": "grammatika"}
 LESSON_LEVELS = list(LEVELS)  # A0 ham dars darajasi
 ADMIN_IDS = {int(x) for x in os.getenv("ADMIN_IDS", "").replace(" ", "").split(",") if x.isdigit()}
-SITE_ALL = os.getenv("SITE_ALL") == "1"  # 1 bo'lsa: hamma (bepul ham) darsni Rumiyo saytida o'tadi (salom, dars, suhbat)
+SITE_ALL = os.getenv("SITE_ALL") != "0"  # 1 bo'lsa: hamma (bepul ham) darsni Rumiyo saytida o'tadi (salom, dars, suhbat)
 UNLOCK_HOUR = int(os.getenv("UNLOCK_HOUR", "12"))  # keyingi dars shu soatda ochiladi (Toshkent vaqti)
 TZ = timezone(timedelta(hours=5))
 FREE_LESSONS = int(os.getenv("FREE_LESSONS", "1"))  # boshidagi bepul darslar soni
@@ -5452,27 +5452,6 @@ def en_a0_import():
     db.execute("DELETE FROM lessons WHERE url=? AND lang='en'", (f"{base}a1-1/",))
     db.commit()
     return added
-
-
-@dp.message(Command("sayt"))
-async def cmd_site_check(m: Message):
-    """Faqat admin: dars nega Rumiyo saytida ochilmayotganini ko'rsatadi (qiymatlarni ko'rsatmaydi)."""
-    if not is_admin(m.from_user.id):
-        return
-    uid = m.from_user.id
-    ok = lambda v: "✅" if v else "❌"
-    lines = [
-        f"{ok(RUMIYO_URL)} RUMIYO_URL (yoki TALK_URL) qo'yilgan" + (f": {RUMIYO_URL}" if RUMIYO_URL else " — Bot-xosting Sozlamalariga saytingiz manzilini qo'shing"),
-        f"{ok(TALK_SECRET)} TALK_SECRET qo'yilgan" + ("" if TALK_SECRET else " — saytdagi bilan bir xil maxfiy so'z kerak"),
-        f"{ok(os.getenv('SUHBAT_ON') != '1')} SUHBAT_ON o'chiq" + ("" if os.getenv("SUHBAT_ON") != "1" else " — shu o'zgaruvchini o'chiring"),
-        f"{ok(os.getenv('INTRO_OFF') != '1')} INTRO_OFF o'chiq" + ("" if os.getenv("INTRO_OFF") != "1" else " — shu o'zgaruvchini o'chiring"),
-        f"{ok(is_paid(uid) or is_admin(uid))} Siz VIP/admin (shuning uchun sizda ishlaydi)",
-        f"{ok(SITE_ALL)} SITE_ALL=1: hamma foydalanuvchi (bepul ham) Rumiyo saytida o'tadi" + ("" if SITE_ALL else " — qo'shilmagan: hozir faqat VIP/admin uchun"),
-        "",
-        ("✅ Hammasi joyida: /dars dagi «📖 Darsni ochish» darsni Rumiyo saytida ochadi." if site_lessons(uid)
-         else "❌ Shartlar bajarilmagan: «📖 Darsni ochish» darsni to'g'ridan-to'g'ri trenerda ochadi (Rumiyo bilan suhbatsiz)."),
-    ]
-    await m.answer("\n".join(lines), disable_web_page_preview=True)
 
 
 @dp.message(Command("dars_ochir"))
