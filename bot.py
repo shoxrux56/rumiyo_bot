@@ -1536,6 +1536,28 @@ def short(u):
     return u[8:] if u.startswith("https://") else u
 
 
+ADM_CMDS_RUN = {
+    "dars": ("📖 Dars", lambda m: cmd_lesson(m)), "imtihon": ("📝 Imtihon", lambda m: cmd_exam(m)),
+    "hafta": ("📅 Hafta", lambda m: cmd_week(m)), "hafta_ai": ("🗣 Haftalik AI sinov", lambda m: cmd_week_ai(m)),
+    "sotuv": ("💰 Sotuv statistikasi", lambda m: cmd_sales(m)), "vip_royxat": ("💎 VIP ro'yxati", lambda m: cmd_vip_list(m)),
+    "zaxira": ("☁️ Zaxira", lambda m: cmd_backup(m)), "linklar": ("📋 Linklar", lambda m: cmd_links(m)),
+    "ochish": ("🔓 Keyingi darsni ochish", lambda m: cmd_unlock(m)), "boshidan": ("🔄 O'zimni boshidan", lambda m: cmd_restart_me(m)),
+    "kunlar": ("📚 Rus kunlari (401)", lambda m: cmd_days(m)), "kunlar_en": ("📚 Ingliz kunlari (251)", lambda m: cmd_days_en(m)),
+    "klip_zip": ("🎞 Klip zip", lambda m: cmd_clips_zip(m)), "xarakter": ("🎭 Rumiyo xarakteri", lambda m: cmd_character(m)),
+    "vip": ("💎 VIP", lambda m: cmd_pro(m)), "pul": ("💵 Pul / balans", lambda m: cmd_pul(m)),
+}
+ADM_CMDS_ARG = {
+    "ruxsat": ("ℹ️ /ruxsat", "/ruxsat 123456789 — o'quvchiga to'lovsiz to'liq ruxsat"),
+    "daraja": ("ℹ️ /daraja", "/daraja 123456789 A1 ru — o'quvchi darajasini o'zgartirish (ru yoki en)"),
+    "joyla": ("ℹ️ /joyla", "/joyla A1 113 3 — A1 dagi 113-darsni 3-o'ringa ko'chirish"),
+    "dars_ochir": ("ℹ️ /dars_ochir", "/dars_ochir so'z — nomida shu so'z bor darslarni o'chirish (ko'pi bilan 3 ta)"),
+    "promo": ("ℹ️ /promo", "/promo KOD CHEGIRMA% KOMISSIYA% [EGASI_ID] — promokod yaratish"),
+    "ovoz": ("ℹ️ /ovoz", "/ovoz missed | comeback | last — ovozli eslatmani sinash"),
+    "ovoz_qosh": ("ℹ️ /ovoz_qosh", "/ovoz_qosh missed {name}, nega kirmading? — eslatma gapi qo'shish"),
+    "hammasini_nolla": ("⚠️ /hammasini_nolla", "/hammasini_nolla — HAMMA o'quvchi progressini nolga tushiradi. Xavfli, shuning uchun tugma yo'q: faqat qo'lda yozing."),
+}
+
+
 def admin_home():
     rows = [InlineKeyboardButton(text=f"{lv} ({len(lessons_of(lv))})", callback_data=f"adm:lv:{lv}")
             for lv in LESSON_LEVELS]
@@ -1545,6 +1567,7 @@ def admin_home():
                   InlineKeyboardButton(text="☁️ Zaxira kanali", callback_data="adm:cloud")])
     extra.append([InlineKeyboardButton(text="🧠 AI ni o'qitish", callback_data="adm:rm"),
                   InlineKeyboardButton(text="🔑 Kalitlar", callback_data="adm:rk")])
+    extra.append([InlineKeyboardButton(text="🧰 Barcha buyruqlar", callback_data="adm:cmds")])
     return InlineKeyboardMarkup(inline_keyboard=[rows[0:2], rows[2:4], rows[4:6]] + extra)
 
 
@@ -1666,6 +1689,23 @@ async def admin_cb(c: CallbackQuery):
                    "Bir xabarda istalgancha, har qatorga bittadan yozing, yoki ketma-ket yuboring. Xabar darhol o'chiriladi.\n"
                    "Kalitni hech kimga va GitHub'ga bermang.")
         await edit(c, msg, kb_of([("❌ Bekor qilish", "adm:rk")]))
+    elif act == "cmds":
+        rows = []
+        run = list(ADM_CMDS_RUN.items())
+        for i in range(0, len(run), 2):
+            rows.append([(t, f"adm:cmd:{k}") for k, (t, _f) in run[i:i + 2]])
+        info = [(t, f"adm:cmdi:{k}") for k, (t, _u) in ADM_CMDS_ARG.items()]
+        for i in range(0, len(info), 2):
+            rows.append(info[i:i + 2])
+        rows.append([("⬅️ Orqaga", "adm:home")])
+        await edit(c, "🧰 Barcha buyruqlar\n\nKo'k tugmalar darhol ishlaydi. Pastdagilar (ℹ️) parametr talab qiladi: bossangiz yozish usuli chiqadi.", kb_of(*rows))
+    elif act == "cmd" and p[2] in ADM_CMDS_RUN:
+        await c.answer()
+        fake = c.message.model_copy(update={"from_user": c.from_user, "text": "/" + p[2]})
+        await ADM_CMDS_RUN[p[2]][1](fake)
+    elif act == "cmdi" and p[2] in ADM_CMDS_ARG:
+        await c.answer()
+        await c.message.answer(ADM_CMDS_ARG[p[2]][1])
     elif act == "rmadd":
         pending[uid] = ("rm1",)
         await edit(c, "🧠 Yangi gap · 1/2\n\nODAM nima deydi? Shuni yozing (ruscha yoki o'zbekcha).\nMasalan: Salom\n\n"
